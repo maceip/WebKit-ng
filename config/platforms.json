@@ -1,0 +1,21 @@
+{
+  "platforms": {
+    "android": {
+      "status": "active",
+      "sourceEnv": "NG_ANDROID_SOURCE",
+      "defaultSource": "/home/ubuntu/webkit/wpe-android",
+      "artifactPatterns": ["*.apk", "*.aar", "*.tar.xz"]
+    },
+    "windows": {
+      "status": "active",
+      "mode": "aws-ssm",
+      "instanceEnv": "NG_WINDOWS_INSTANCE_ID",
+      "artifactEnv": "NG_WINDOWS_ARTIFACT_S3",
+      "artifactPatterns": ["*.zip", "*.7z", "*.exe", "*.msi", "*.log"]
+    },
+    "linux": { "status": "empty" },
+    "ios": { "status": "empty" },
+    "macos": { "status": "empty" }
+  }
+}
+

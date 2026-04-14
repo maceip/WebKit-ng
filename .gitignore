@@ -1,0 +1,6 @@
+var/
+workspace/
+node_modules/
+.env
+*.log
+
