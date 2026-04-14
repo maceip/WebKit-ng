@@ -15,7 +15,15 @@
     },
     "linux": { "status": "empty" },
     "ios": { "status": "empty" },
-    "macos": { "status": "empty" }
+    "macos": {
+      "status": "active",
+      "mode": "aws-ssm",
+      "region": "eu-central-1",
+      "hostId": "h-0fe6b0782f40a6c69",
+      "instanceId": "i-092d7452a5deac519",
+      "instanceType": "mac2-m2.metal",
+      "sourceEnv": "NG_MACOS_SOURCE",
+      "artifactPatterns": ["*.zip", "*.tar", "*.tar.gz", "*.dmg", "*.log"]
+    }
   }
 }
-
