@@ -3,4 +3,4 @@ workspace/
 node_modules/
 .env
 *.log
-
+tools/noVNC/

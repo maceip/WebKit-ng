@@ -31,7 +31,7 @@ Important artifacts:
 
 `MiniBrowser.zip` SHA-256:
 
-`64b8507fb5f894e0b1db879f4016e3cb5d8dfd6ba9d36739be09a8404b1caa78`
+`de98c035f90b0972020c9a3be86a6ab1ad6ec1fb2391cfc0ac52515155d6575f`
 
 ## Build Result Evidence
 
@@ -81,5 +81,25 @@ Exit code: `0`.
 ## Caveats
 
 - This is a native WebKit `PORT=Win` / WinCairo-style build, not proof of a WPE Windows backend build.
-- The source tree has local modifications and some `.rej` files from prior patch attempts. The output binaries are real, but the patch set needs to be normalized into `changes/*` and `patches/windows` before relying on reproducible rebuilds.
+- The output binaries are real, but the source provenance is not clean enough to call this a reproducible accepted build.
+- The live Windows source tree is on upstream `main` commit `52dbebe20b922cab89928085f9dcfa8082a813e4` with local dirty edits.
+- The handoff/repro metadata says `base_commit=c46301f7ed90925848f626dae58071407d077bd3`.
+- The `maceip/WebKit:dawn` branch resolves to `a836cab7bc76bc2c29b298854f84276842470572`, based on `c46301f7`, and contains the Dawn/WebGPU and inspector changes as commits/files.
+- The live source tree has local modifications and `.rej` files from prior patch attempts. These must be normalized into `changes/*` and `patches/windows` before relying on reproducible rebuilds.
 - I did not launch `MiniBrowser.exe` interactively. The verification proves the binary exists, links as part of the build, is uploaded in `MiniBrowser.zip`, and JavaScriptCore executes.
+
+## Follow-Up Build Gate
+
+For the next Windows acceptance build, use a clean checkout of `maceip/WebKit:dawn` at `a836cab7bc76bc2c29b298854f84276842470572` or a later explicit commit. The build must write and upload a manifest containing:
+
+- source commit and branch
+- `git status --porcelain`
+- applied patch list
+- CMake cache
+- build logs
+- artifact hashes
+
+Acceptance needs both checks:
+
+- MiniBrowser launches and right-click `Show Inspector` works.
+- WebGPU/Dawn configuration is intentionally enabled and visible in `CMakeCache.txt`.
