@@ -48,6 +48,12 @@ for platform in $platforms; do
       jq --arg id "$id" --arg kind "$kind" --arg uri "$uri" \
         '. += [{id:$id, kind:$kind, uri:$uri}]' "$item_array" > "$item_array.next"
       mv "$item_array.next" "$item_array"
+    elif [[ "$kind" == "homebrew-packages" || "$kind" == "manual-requirement" ]]; then
+      jq --argjson item "$item" '. += [$item]' "$item_array" > "$item_array.next"
+      mv "$item_array.next" "$item_array"
+    else
+      jq --argjson item "$item" '. += [$item + {catalogWarning:"unknown dependency kind"}]' "$item_array" > "$item_array.next"
+      mv "$item_array.next" "$item_array"
     fi
   done <<<"$items"
 
@@ -60,4 +66,3 @@ done
 mkdir -p "$(dirname "$OUT")"
 mv "$tmp" "$OUT"
 cat "$OUT"
-

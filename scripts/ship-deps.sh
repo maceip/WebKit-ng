@@ -53,6 +53,12 @@ if [[ "$machine_type" == "aws-ssm" ]]; then
       if [[ "$kind" == "s3-prefix" ]]; then
         uri="$(jq -r '.uri' <<<"$item")"
         printf 'aws s3 sync "%s" "%s/%s"\n' "$uri" "$target_root" "$id"
+      elif [[ "$kind" == "homebrew-packages" ]]; then
+        packages="$(jq -r '.packages | join(" ")' <<<"$item")"
+        if [[ "$PLATFORM" == "macos" ]]; then
+          printf 'if ! command -v brew >/dev/null 2>&1 && [ ! -x /opt/homebrew/bin/brew ]; then sudo -u ec2-user env NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; fi\n'
+          printf 'sudo -u ec2-user env PATH=/opt/homebrew/bin:/opt/homebrew/sbin:$PATH brew install %s\n' "$packages"
+        fi
       elif [[ "$kind" == "local-file" ]]; then
         path="$(jq -r '.path' <<<"$item")"
         bucket="$(jq -r '.artifactBucket' "$CONFIG")/$PLATFORM/$id"
@@ -79,4 +85,3 @@ fi
 
 echo "Unsupported machine type for $PLATFORM: $machine_type" >&2
 exit 2
-

@@ -31,7 +31,19 @@
     "macos": {
       "source": "native macOS WebKit bootstrap",
       "installRoot": "/Users/ec2-user/ng-deps",
-      "items": []
+      "items": [
+        {
+          "id": "macos-homebrew-core-build-tools",
+          "kind": "homebrew-packages",
+          "packages": ["cmake", "ninja", "pkg-config", "gperf", "ruby", "python@3.12", "git", "git-lfs"]
+        },
+        {
+          "id": "xcode-26.2-or-newer",
+          "kind": "manual-requirement",
+          "status": "missing",
+          "description": "WebKit build scripts require full Xcode 26.2 or later. Command Line Tools alone are not sufficient."
+        }
+      ]
     },
     "linux": {
       "source": "placeholder",
