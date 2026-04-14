@@ -107,6 +107,10 @@ function getBuild(id) {
   return loadState().builds.find((build) => build.id === id);
 }
 
+function readJsonFile(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
 function routeParts(url) {
   return new URL(url, `http://127.0.0.1:${port}`).pathname.split('/').filter(Boolean);
 }
@@ -124,6 +128,21 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && parts[0] === 'builds' && parts.length === 1) {
       return json(res, 200, loadState().builds);
+    }
+
+    if (req.method === 'GET' && parts[0] === 'changes' && parts.length === 1) {
+      return json(res, 200, {
+        config: readJsonFile(join(root, 'config', 'changes.json')),
+        note: 'Enable changes in config/changes.json; patches live under changes/<id>.'
+      });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'dependencies' && parts.length === 1) {
+      const catalogPath = join(varDir, 'dependency-catalog.json');
+      return json(res, 200, {
+        config: readJsonFile(join(root, 'config', 'dependencies.json')),
+        catalog: existsSync(catalogPath) ? readJsonFile(catalogPath) : null
+      });
     }
 
     if (req.method === 'POST' && parts[0] === 'builds' && parts.length === 1) {

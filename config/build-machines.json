@@ -1,0 +1,26 @@
+{
+  "machines": {
+    "android": {
+      "type": "local",
+      "root": "/home/ubuntu",
+      "dependencyRoot": "/home/ubuntu/ng-webkit/var/deps/android"
+    },
+    "windows": {
+      "type": "aws-ssm",
+      "regionEnv": "AWS_REGION",
+      "defaultRegion": "eu-west-1",
+      "instanceIdEnv": "NG_WINDOWS_INSTANCE_ID",
+      "defaultInstanceId": "i-0d254760fe07c5e9f",
+      "dependencyRoot": "C:\\Bootstrap\\ng-deps"
+    },
+    "macos": {
+      "type": "aws-ssm",
+      "regionEnv": "NG_MACOS_REGION",
+      "defaultRegion": "eu-central-1",
+      "instanceIdEnv": "NG_MACOS_INSTANCE_ID",
+      "defaultInstanceId": "i-092d7452a5deac519",
+      "dependencyRoot": "/Users/ec2-user/ng-deps"
+    }
+  }
+}
+

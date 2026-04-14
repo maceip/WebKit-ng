@@ -1,0 +1,10 @@
+{
+  "activeChanges": [
+    {
+      "id": "passkeys-credentials-get",
+      "enabled": false,
+      "platforms": ["android", "windows", "macos", "linux", "ios"]
+    }
+  ]
+}
+

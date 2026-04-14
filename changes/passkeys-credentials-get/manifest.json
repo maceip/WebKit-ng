@@ -1,0 +1,16 @@
+{
+  "id": "passkeys-credentials-get",
+  "title": "Passkeys changes for navigator.credentials.get",
+  "enabledByDefault": false,
+  "description": "Placeholder for WebKit changes that alter navigator.credentials.get/passkey behavior.",
+  "platforms": ["android", "windows", "macos", "linux", "ios"],
+  "patchOrder": [
+    "patches/common",
+    "patches/{platform}"
+  ],
+  "notes": [
+    "Put cross-platform WebCore/WebKit changes in patches/common.",
+    "Put WPE Android, Windows, or Cocoa-specific build fixes in the matching platform patch directory."
+  ]
+}
+

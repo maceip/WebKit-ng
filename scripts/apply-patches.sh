@@ -15,6 +15,6 @@ apply_dir() {
 }
 
 git -C "$SOURCE_DIR" rev-parse --is-inside-work-tree >/dev/null
+"$ROOT/scripts/apply-changes.sh" "$PLATFORM" "$SOURCE_DIR"
 apply_dir "$ROOT/patches/common"
 apply_dir "$ROOT/patches/$PLATFORM"
-

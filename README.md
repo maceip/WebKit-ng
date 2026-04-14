@@ -25,6 +25,35 @@ Patch files should be standard `git format-patch` or `git diff` patches with `.p
 or `.diff` suffixes. The build scripts apply `patches/common` first, then the platform
 patch directory.
 
+## Central WebKit Changes
+
+Put product changes in `changes/<change-id>`, not directly in platform scripts. Enable
+them in `config/changes.json`. Every target applies enabled changes before its
+platform build starts.
+
+```bash
+./scripts/new-change.sh passkeys-credentials-get
+```
+
+For example, a passkey change to `navigator.credentials.get` would usually start as a
+WebCore patch in `changes/passkeys-credentials-get/patches/common`, with any Android
+or Windows build fixes beside it in `patches/android` or `patches/windows`.
+
+## Dependencies
+
+Dependencies are cataloged in `config/dependencies.json` and build-machine placement is
+defined in `config/build-machines.json`.
+
+```bash
+./scripts/catalog-deps.sh
+NG_DEPS_UPLOAD=1 ./scripts/catalog-deps.sh
+./scripts/ship-deps.sh android
+./scripts/ship-deps.sh windows
+```
+
+The catalog records file size and SHA-256 for local dependency artifacts, and the
+shipping script copies local dependencies or syncs S3 prefixes to the target machine.
+
 ## Configuration
 
 Copy `.env.example` to `.env` or export the values in your shell.
