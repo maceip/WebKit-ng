@@ -25,6 +25,10 @@ VCPKG_ROOT="${NG_WINDOWS_VCPKG_ROOT:-C:/vcpkg}"
 
 WEBKIT_URL="${NG_WINDOWS_WEBKIT_URL:-https://github.com/WebKit/WebKit.git}"
 WEBKIT_COMMIT="${NG_WINDOWS_WEBKIT_COMMIT:-52dbebe20b922cab89928085f9dcfa8082a813e4}"
+if [[ "${NG_WINDOWS_SOURCE_PRESET:-}" == "iangrunert-win-gigacage-skia-fixes" ]]; then
+  WEBKIT_URL="${NG_WINDOWS_WEBKIT_URL:-https://github.com/iangrunert/WebKit.git}"
+  WEBKIT_COMMIT="${NG_WINDOWS_WEBKIT_COMMIT:-64f58084c78130b874d05dbcfb508147354095af}"
+fi
 # Short tree path: CMake emits .bat custom commands with huge argv lists; Windows cmd.exe
 # limits a single line to ~8191 chars (generate-serializers.py with many .serialization.in paths).
 # Default C:/W/n<hash> keeps per-path prefixes small. Override with NG_WINDOWS_CLEAN_SOURCE.

@@ -482,7 +482,7 @@ aws s3 ls "$S3_PREFIX/" --recursive --summarize
 On the Windows host:
 
 ```powershell
-Select-String -Path C:\Work\ng-webkit-clean-source\WebKitBuild\Release\CMakeCache.txt -Pattern "PORT:STRING=|ENABLE_MINIBROWSER:BOOL=|ENABLE_WEBGPU:BOOL=|USE_DAWN:BOOL="
+Select-String -Path C:\Work\ng-webkit-clean-source\WebKitBuild\Release\CMakeCache.txt -Pattern "PORT:STRING=|ENABLE_MINIBROWSER:BOOL=|ENABLE_WEBGPU:BOOL="
 Get-FileHash C:\Work\ng-webkit-clean-source\WebKitBuild\Release\bin\MiniBrowser.exe -Algorithm SHA256
 ```
 

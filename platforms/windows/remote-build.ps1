@@ -182,7 +182,7 @@ foreach ($r in $required) {
 $mb = Join-Path $bin "MiniBrowser.exe"
 $mbh = Get-FileHash $mb -Algorithm SHA256
 $cmakeLines = Get-Content $cache | Where-Object {
-  $_ -match '^(PORT:|ENABLE_WEBGPU|USE_DAWN|ENABLE_MINIBROWSER|CMAKE_BUILD_TYPE):'
+  $_ -match '^(PORT:|ENABLE_WEBGPU|ENABLE_MINIBROWSER|CMAKE_BUILD_TYPE):'
 }
 $webgpuEnabled = ($cmakeLines | Where-Object { $_ -match 'ENABLE_WEBGPU:BOOL=ON' }).Count -gt 0
 

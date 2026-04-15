@@ -80,6 +80,17 @@ Windows WebGPU runtime service work belongs in
 Enable it in `config/changes.json` only for builds intended to validate the
 custom service path.
 
+For the current Windows WebGPU runtime investigation, use:
+
+```bash
+NG_WINDOWS_SOURCE_PRESET=iangrunert-win-gigacage-skia-fixes \
+NG_WINDOWS_ENABLE_WEBGPU=1 \
+./scripts/run-build.sh windows <build-id>
+```
+
+That preset points the reproducible Windows checkout at
+`iangrunert/WebKit@64f58084c78130b874d05dbcfb508147354095af`.
+
 ## Dependencies
 
 Dependencies are cataloged in `config/dependencies.json` and build-machine placement is

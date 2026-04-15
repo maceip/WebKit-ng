@@ -17,6 +17,35 @@ Allowed here:
 - Runtime validation changes that prove `navigator.gpu.requestAdapter()`
   succeeds.
 
+## Source Preset
+
+For this lane, use the Windows memory/Gigacage/Skia fixes branch as the source
+baseline:
+
+```bash
+NG_WINDOWS_SOURCE_PRESET=iangrunert-win-gigacage-skia-fixes \
+NG_WINDOWS_ENABLE_WEBGPU=1 \
+./scripts/run-build.sh windows <build-id>
+```
+
+The preset currently resolves to:
+
+```text
+https://github.com/iangrunert/WebKit.git
+64f58084c78130b874d05dbcfb508147354095af
+```
+
+Override `NG_WINDOWS_WEBKIT_URL` or `NG_WINDOWS_WEBKIT_COMMIT` only when testing
+a newer explicit commit.
+
+## Dawn CMake Note
+
+Do not use `USE_DAWN` as the Windows WebGPU switch. In current WebKit, the only
+remaining Windows reference is a stale `PlatformWin.cmake` hook into
+`Source/WebCore/platform/graphics/gpu/dawn`, whose sources are no longer present.
+The active path for this lane is `ENABLE_WEBGPU=ON`, Dawn resolution through
+`FindDawn.cmake`, and runtime fixes in `Modules/WebGPU/Implementation`.
+
 Not allowed here:
 
 - Auth/passkey work.
