@@ -3,7 +3,7 @@ new file mode 100644
 index 000000000000..572ec4d72cbc
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnAdapter.cpp
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,81 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -34,6 +34,7 @@ index 000000000000..572ec4d72cbc
 +
 +#if PLATFORM(WIN) && ENABLE(WEBGPU)
 +
++#include "WebGPUDevice.h"
 +#include "WebGPUSupportedFeatures.h"
 +#include "WebGPUSupportedLimits.h"
 +
