@@ -2,6 +2,8 @@
 
 This change lane owns the custom Windows WebGPU service work.
 
+See `DESIGN.md` for the Windows Dawn runtime map.
+
 The Windows build can compile with WebGPU/Dawn enabled, but runtime acceptance
 requires a service/process path that makes WebGPU usable from MiniBrowser. Keep
 that work isolated here so it can be enabled, disabled, reviewed, and reverted
