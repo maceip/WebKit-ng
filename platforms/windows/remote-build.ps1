@@ -20,6 +20,16 @@ function Invoke-Git {
   return $output
 }
 
+function Test-Git {
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  $output = & git @args 2>&1
+  $exitCode = $LASTEXITCODE
+  $ErrorActionPreference = $prev
+  if ($output) { $output | ForEach-Object { Write-Host $_ } }
+  return ($exitCode -eq 0)
+}
+
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $configPath = Join-Path $here "build-config.json"
 if (-not (Test-Path $configPath)) {
@@ -132,7 +142,11 @@ Set-Location $source
 $patchRecords = @()
 foreach ($p in ($commonPatches + $winPatches)) {
   Write-Host "Applying $($p.FullName)"
-  Invoke-Git apply --whitespace=nowarn $p.FullName
+  if (Test-Git apply --check --reverse $p.FullName) {
+    Write-Host "Skipping already-applied patch $($p.Name)"
+  } else {
+    Invoke-Git apply --whitespace=nowarn $p.FullName
+  }
   $h = Get-FileHash $p.FullName -Algorithm SHA256
   $patchRecords += @{ name = $p.Name; sha256 = $h.Hash }
 }
