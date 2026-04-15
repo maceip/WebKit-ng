@@ -89,7 +89,7 @@ new file mode 100644
 index 000000000000..29571239a655
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnAdapter.h
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,55 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -120,11 +120,10 @@ index 000000000000..29571239a655
 +#if PLATFORM(WIN) && ENABLE(WEBGPU)
 +
 +#include "WebGPUAdapter.h"
-+#include <WebGPU/WebGPU.h>
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnAdapterHandle = WGPUAdapter;
++using WindowsDawnAdapterHandle = struct WGPUAdapterImpl*;
 +
 +class WindowsDawnAdapter final : public Adapter {
 +public:
@@ -151,7 +150,7 @@ new file mode 100644
 index 000000000000..c20c665a829c
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnGPU.cpp
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,193 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -184,6 +183,7 @@ index 000000000000..c20c665a829c
 +
 +#include "WebGPUWindowsDawnAdapter.h"
 +#include <memory>
++#include <webgpu/webgpu.h>
 +#include <windows.h>
 +#include <wtf/NeverDestroyed.h>
 +
@@ -349,7 +349,7 @@ new file mode 100644
 index 000000000000..6105c841d3de
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnGPU.h
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,90 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -380,12 +380,11 @@ index 000000000000..6105c841d3de
 +#if PLATFORM(WIN) && ENABLE(WEBGPU)
 +
 +#include "WebGPU.h"
-+#include <WebGPU/WebGPU.h>
 +#include <wtf/RefCounted.h>
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnInstanceHandle = WGPUInstance;
++using WindowsDawnInstanceHandle = struct WGPUInstanceImpl*;
 +
 +class WindowsDawnGPU final : public GPU, public RefCounted<WindowsDawnGPU> {
 +public:
