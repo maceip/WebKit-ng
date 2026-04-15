@@ -64,6 +64,7 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE/patches/common" "$STAGE/patches/windows"
 export NG_STAGE_PATCH_ROOT="$STAGE/patches"
 export NG_BUILD_PLATFORM="windows"
+export NG_ROOT
 python3 <<'PY'
 import json
 import os
