@@ -46,6 +46,18 @@ remaining Windows reference is a stale `PlatformWin.cmake` hook into
 The active path for this lane is `ENABLE_WEBGPU=ON`, Dawn resolution through
 `FindDawn.cmake`, and runtime fixes in `Modules/WebGPU/Implementation`.
 
+## First Runtime Slice
+
+`patches/windows/0001-windows-dawn-request-adapter-runtime.patch` wires a
+Windows-only `navigator.gpu` backing directly in WebCore. It deliberately avoids
+turning on `HAVE_WEBGPU_IMPLEMENTATION` for Windows, because that switch pulls in
+the current Cocoa GPU-process and presentation stack. The slice loads
+`webgpu_dawn.dll` at runtime, creates a Dawn instance, and resolves
+`requestAdapter()` only when Dawn returns a real adapter.
+
+This is intentionally adapter-only. `requestDevice()` still returns `null`;
+canvas presentation and GPU-process remoting remain separate follow-up surfaces.
+
 Not allowed here:
 
 - Auth/passkey work.

@@ -7,7 +7,7 @@
     },
     {
       "id": "windows-webgpu-service",
-      "enabled": false,
+      "enabled": true,
       "platforms": ["windows"]
     }
   ]
