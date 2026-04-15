@@ -62,6 +62,44 @@ require_cmd python3
 STAGE="$NG_ARTIFACT_DIR/windows-bundle-$ID"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/patches/common" "$STAGE/patches/windows"
+export NG_STAGE_PATCH_ROOT="$STAGE/patches"
+export NG_BUILD_PLATFORM="windows"
+python3 <<'PY'
+import json
+import os
+import shutil
+from pathlib import Path
+
+root = Path(os.environ["NG_ROOT"])
+patch_root = Path(os.environ["NG_STAGE_PATCH_ROOT"])
+platform = os.environ["NG_BUILD_PLATFORM"]
+changes_file = root / "config" / "changes.json"
+
+with changes_file.open(encoding="utf-8") as f:
+    changes = json.load(f).get("activeChanges", [])
+
+for change_index, change in enumerate(changes):
+    if not change.get("enabled"):
+        continue
+    platforms = change.get("platforms") or []
+    if platform not in platforms and "all" not in platforms:
+        continue
+    change_id = change["id"]
+    change_dir = root / "changes" / change_id
+    if not change_dir.is_dir():
+        raise SystemExit(f"Enabled change does not exist: {change_id}")
+    for bucket in ("common", platform):
+        source_dir = change_dir / "patches" / bucket
+        if not source_dir.is_dir():
+            continue
+        target_dir = patch_root / bucket
+        target_dir.mkdir(parents=True, exist_ok=True)
+        for patch_index, patch in enumerate(sorted(source_dir.iterdir())):
+            if patch.suffix not in (".patch", ".diff"):
+                continue
+            target = target_dir / f"0000-change-{change_index:02d}-{patch_index:02d}-{change_id}-{patch.name}"
+            shutil.copy2(patch, target)
+PY
 cp -a "$NG_ROOT/patches/common/." "$STAGE/patches/common/" 2>/dev/null || true
 cp -a "$NG_ROOT/patches/windows/." "$STAGE/patches/windows/" 2>/dev/null || true
 cp "$SCRIPT_DIR/remote-build.ps1" "$STAGE/"
