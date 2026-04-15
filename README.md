@@ -75,6 +75,11 @@ For example, a passkey change to `navigator.credentials.get` would usually start
 WebCore patch in `changes/passkeys-credentials-get/patches/common`, with any Android
 or Windows build fixes beside it in `patches/android` or `patches/windows`.
 
+Windows WebGPU runtime service work belongs in
+`changes/windows-webgpu-service`, not in generic Windows compiler/build patches.
+Enable it in `config/changes.json` only for builds intended to validate the
+custom service path.
+
 ## Dependencies
 
 Dependencies are cataloged in `config/dependencies.json` and build-machine placement is

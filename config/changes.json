@@ -4,7 +4,11 @@
       "id": "passkeys-credentials-get",
       "enabled": false,
       "platforms": ["android", "windows", "macos", "linux", "ios"]
+    },
+    {
+      "id": "windows-webgpu-service",
+      "enabled": false,
+      "platforms": ["windows"]
     }
   ]
 }
-

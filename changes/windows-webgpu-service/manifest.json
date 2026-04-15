@@ -1,0 +1,17 @@
+{
+  "id": "windows-webgpu-service",
+  "title": "Windows WebGPU service integration",
+  "enabledByDefault": false,
+  "description": "Repo-owned lane for the custom Windows WebGPU service needed after WebGPU/Dawn compilation succeeds.",
+  "platforms": ["windows"],
+  "patchOrder": [
+    "patches/common",
+    "patches/windows"
+  ],
+  "notes": [
+    "Keep service/process integration here, not in generic Windows build-fix patches.",
+    "Use patches/windows for Windows-only WebKit source changes.",
+    "Use patches/common only if the WebGPU service requires cross-platform WebKit interfaces.",
+    "Acceptance requires MiniBrowser runtime validation where navigator.gpu.requestAdapter() succeeds, not just ENABLE_WEBGPU=ON in CMake."
+  ]
+}
