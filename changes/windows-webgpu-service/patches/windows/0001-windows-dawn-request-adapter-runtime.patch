@@ -89,7 +89,7 @@ new file mode 100644
 index 000000000000..29571239a655
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnAdapter.h
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,56 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -120,10 +120,11 @@ index 000000000000..29571239a655
 +#if PLATFORM(WIN) && ENABLE(WEBGPU)
 +
 +#include "WebGPUAdapter.h"
++#include <WebGPU/WebGPU.h>
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnAdapterHandle = struct WGPUAdapterImpl*;
++using WindowsDawnAdapterHandle = WGPUAdapter;
 +
 +class WindowsDawnAdapter final : public Adapter {
 +public:
@@ -150,7 +151,7 @@ new file mode 100644
 index 000000000000..c20c665a829c
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnGPU.cpp
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,192 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -188,14 +189,57 @@ index 000000000000..c20c665a829c
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnAdapterHandle = struct WGPUAdapterImpl*;
-+using CreateInstanceFunction = WindowsDawnInstanceHandle (*)(const void*);
-+using RequestAdapterCallback = void (*)(uint32_t, WindowsDawnAdapterHandle, const char*, void*);
-+using RequestAdapterFunction = void (*)(WindowsDawnInstanceHandle, const void*, RequestAdapterCallback, void*);
++using CreateInstanceFunction = WindowsDawnInstanceHandle (*)(const WGPUInstanceDescriptor*);
++using RequestAdapterFunction = void (*)(WindowsDawnInstanceHandle, const WGPURequestAdapterOptions*, WGPURequestAdapterCallback, void*);
 +using ProcessEventsFunction = void (*)(WindowsDawnInstanceHandle);
 +using ReleaseAdapterFunction = void (*)(WindowsDawnAdapterHandle);
 +
-+static constexpr uint32_t requestAdapterStatusSuccess = 0;
++static constexpr auto requestAdapterStatusSuccess = WGPURequestAdapterStatus_Success;
++
++enum class NGWebGPUBackend : uint8_t {
++    Default,
++    D3D12,
++    Vulkan,
++    D3D11,
++    Null,
++};
++
++static WGPUBackendType toWGPUBackendType(NGWebGPUBackend backend)
++{
++    switch (backend) {
++    case NGWebGPUBackend::Default:
++    case NGWebGPUBackend::D3D12:
++        return WGPUBackendType_D3D12;
++    case NGWebGPUBackend::Vulkan:
++        return WGPUBackendType_Vulkan;
++    case NGWebGPUBackend::D3D11:
++        return WGPUBackendType_D3D11;
++    case NGWebGPUBackend::Null:
++        return WGPUBackendType_Null;
++    }
++
++    return WGPUBackendType_D3D12;
++}
++
++static WGPUBackendType windowsDawnBackendType()
++{
++    return toWGPUBackendType(NGWebGPUBackend::Default);
++}
++
++static WGPUPowerPreference toWGPUPowerPreference(const RequestAdapterOptions& options)
++{
++    if (!options.powerPreference)
++        return WGPUPowerPreference_HighPerformance;
++
++    switch (*options.powerPreference) {
++    case PowerPreference::LowPower:
++        return WGPUPowerPreference_LowPower;
++    case PowerPreference::HighPerformance:
++        return WGPUPowerPreference_HighPerformance;
++    }
++
++    return WGPUPowerPreference_HighPerformance;
++}
 +
 +class DawnLibrary {
 +public:
@@ -267,7 +311,7 @@ index 000000000000..c20c665a829c
 +    ReleaseAdapterFunction releaseAdapter { nullptr };
 +};
 +
-+void WindowsDawnGPU::requestAdapter(const RequestAdapterOptions&, CompletionHandler<void(RefPtr<Adapter>&&)>&& callback)
++void WindowsDawnGPU::requestAdapter(const RequestAdapterOptions& options, CompletionHandler<void(RefPtr<Adapter>&&)>&& callback)
 +{
 +    auto& dawn = DawnLibrary::singleton();
 +    if (!m_instance || !dawn.requestAdapter()) {
@@ -275,8 +319,16 @@ index 000000000000..c20c665a829c
 +        return;
 +    }
 +
++    WGPURequestAdapterOptions backingOptions {
++        .compatibleSurface = nullptr,
++        .powerPreference = toWGPUPowerPreference(options),
++        .backendType = windowsDawnBackendType(),
++        .forceFallbackAdapter = options.forceFallbackAdapter,
++        .xrCompatible = options.xrCompatible,
++    };
++
 +    auto* context = new RequestAdapterContext { WTF::move(callback), dawn.releaseAdapter() };
-+    dawn.requestAdapter()(m_instance, nullptr, [](uint32_t status, WindowsDawnAdapterHandle adapter, const char*, void* userdata) {
++    dawn.requestAdapter()(m_instance, &backingOptions, [](WGPURequestAdapterStatus status, WindowsDawnAdapterHandle adapter, const char*, void* userdata) {
 +        std::unique_ptr<RequestAdapterContext> context { static_cast<RequestAdapterContext*>(userdata) };
 +        if (status == requestAdapterStatusSuccess && adapter) {
 +            context->callback(WindowsDawnAdapter::create(adapter, context->releaseAdapter));
@@ -297,7 +349,7 @@ new file mode 100644
 index 000000000000..6105c841d3de
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnGPU.h
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,91 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -328,11 +380,12 @@ index 000000000000..6105c841d3de
 +#if PLATFORM(WIN) && ENABLE(WEBGPU)
 +
 +#include "WebGPU.h"
++#include <WebGPU/WebGPU.h>
 +#include <wtf/RefCounted.h>
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnInstanceHandle = struct WGPUInstanceImpl*;
++using WindowsDawnInstanceHandle = WGPUInstance;
 +
 +class WindowsDawnGPU final : public GPU, public RefCounted<WindowsDawnGPU> {
 +public:
