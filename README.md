@@ -2,15 +2,51 @@
 
 Build orchestration for patched WebKit/WPE WebKit targets.
 
-Current targets:
+## Build status (2026-04-15)
+
+Latest builds, newest first:
+
+| When (UTC)          | Platform       | Build id                                   | Result    | Notes |
+| ------------------- | -------------- | ------------------------------------------ | --------- | ----- |
+| 2026-04-15 15:16    | macOS          | `macos-clean-20260415T151654Z`             | ❌ failed  | libwebrtc `network_constants.h` -Wconstant-conversion under Xcode 16, fix in flight |
+| 2026-04-15 14:54    | Windows+WebGPU | `dawn-iovalidator-20260415T145405Z`        | ✅ **green** | 33m 29s, all 9551 targets, `ENABLE_WEBGPU=ON`, tar in S3 ([download](#downloads)) |
+| 2026-04-15 14:54    | macOS          | `macos-parallel-20260415T145430Z`          | ❌ failed  | (other agent) concurrent build collision with mine |
+| 2026-04-15 13:45    | Windows+WebGPU | `dawn-wgsl-20260415T134548Z`               | ❌ failed  | WGSL generator compile error, fixed in patch 0006 |
+| 2026-04-15 13:25    | Windows+WebGPU | `dawn-webgpu-20260415T132500Z`             | ❌ failed  | WGSL generator 3-args bug, fixed in patch 0005 |
+| 2026-04-15 12:51    | macOS          | `macos-20260415T125117Z`                   | ❌ failed  | libwebrtc boringssl rename error (concurrency with parallel build) |
+| 2026-04-15 12:47    | macOS          | `macos-first-20260415T124714Z`             | ❌ failed  | `nohup + disown` didn't survive SSM session; replaced with `launchctl submit` |
+| 2026-04-15 12:27    | Windows+WebGPU | `dawn-webgpu-windows-20260415T122728Z`     | ⚠️  partial | Compiled 33m 23s but `ENABLE_WEBGPU=OFF` — PRIVATE flag overrode `-D`, fixed in patch 0004 |
+| 2026-04-15 11:08    | Windows        | `fix-stderr2-20260415T110839Z`             | ✅ green   | Baseline (no WebGPU), 33m 23s, tar in S3 |
+| 2026-04-15 09:05    | Windows        | `green-20260415T090558Z`                   | ❌ failed  | Worker died silently — AwsExe path with spaces broke `Start-Process -ArgumentList` |
+| 2026-04-14 05:09    | Android        | `20260414T050928-81903`                    | ✅ green   | Local gradle build, APKs + AAR + runtime tarballs in S3 |
+
+Current "canonical" artifacts (latest green per platform): see
+[`ASSETS.md`](./ASSETS.md). Detailed runner state, known gotchas, and
+next steps: see [`RUNNER.md`](./RUNNER.md).
+
+## Targets
 
 - `android`: WPE Android/WPEWebKit, built locally on this machine.
 - `windows`: remote Windows builder driven through AWS SSM, with artifacts in S3.
-- `linux`, `ios`, `macos`: placeholders for the next platform scripts.
+- `macos`: remote mac2-m2.metal EC2 instance driven through AWS SSM.
+- `linux`, `ios`: placeholders for the next platform scripts.
 
 The repo owns the patch set and orchestration. Platform source checkouts live outside
 the repo by default so large WebKit trees and build products do not pollute this git
 history.
+
+## Downloads
+
+The most recent green Windows + WebGPU tarball (523 MB, extract on a Windows
+host with D3D12/Vulkan):
+
+```bash
+aws s3 cp s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-iovalidator-20260415T145405Z/ng-webkit-windows-webgpu-dawn-iovalidator-20260415T145405Z.tar.gz \
+  . --region eu-central-1
+```
+
+See [`ASSETS.md`](./ASSETS.md) for the full asset catalog and presigned URL
+generation.
 
 ## Layout
 
