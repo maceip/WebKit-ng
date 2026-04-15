@@ -1,0 +1,13 @@
+diff --git a/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/network_constants.h b/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/network_constants.h
+index 8c43576c6142..74fc464db659 100644
+--- a/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/network_constants.h
++++ b/Source/ThirdParty/libwebrtc/Source/webrtc/rtc_base/network_constants.h
+@@ -38,7 +38,7 @@ constexpr uint16_t kNetworkCostVpn = 1;
+ 
+ // Add -2 to the network cost when using network slicing so that e.g. premium 5G
+ // slice is preferred over regular 5G, everything else being equal.
+-constexpr uint16_t kNetworkCostSlice = -2;
++constexpr int kNetworkCostSlice = -2;
+ 
+ // Aliases for correct wrap-around with network slice cost.
+ constexpr uint16_t kNetworkCostCellular5GSlice =  // 248
