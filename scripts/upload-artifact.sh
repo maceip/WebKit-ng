@@ -13,7 +13,8 @@ require_cmd aws
 
 NAME="$(basename "$ARTIFACT")"
 DEST="${S3_PREFIX%/}/$NAME"
-log "Uploading $ARTIFACT to $DEST"
-aws s3 cp "$ARTIFACT" "$DEST"
+log "Uploading $ARTIFACT to $DEST" >&2
+# aws s3 cp prints progress to stdout — keep stdout clean so callers only capture the URI line below.
+aws s3 cp "$ARTIFACT" "$DEST" >/dev/null
 printf '%s\n' "$DEST"
 

@@ -1,0 +1,41 @@
+diff --git a/Source/cmake/FindDawn.cmake b/Source/cmake/FindDawn.cmake
+index 1a24a45f7d8..124f32d864a 100644
+--- a/Source/cmake/FindDawn.cmake
++++ b/Source/cmake/FindDawn.cmake
+@@ -73,10 +73,24 @@ find_path(Dawn_INCLUDE_DIR
+     NAMES dawn/dawn_proc.h
+ )
+
++# vcpkg Dawn (20260219+) uses dawn_proc_table.h, not dawn_proc.h
++if (NOT Dawn_INCLUDE_DIR)
++    find_path(Dawn_INCLUDE_DIR
++        NAMES dawn/dawn_proc_table.h
++    )
++endif ()
++
+ find_library(Dawn_LIBRARY
+     NAMES ${Dawn_NAMES} dawn_proc
+ )
+
++# vcpkg Dawn names the library webgpu_dawn
++if (NOT Dawn_LIBRARY)
++    find_library(Dawn_LIBRARY
++        NAMES webgpu_dawn
++    )
++endif ()
++
+ # Find components
+ if (WebGPU_INCLUDE_DIR AND Dawn_INCLUDE_DIR AND Dawn_LIBRARY)
+     set(_Dawn_REQUIRED_LIBS_FOUND ON)
+diff --git a/Source/cmake/OptionsWin.cmake b/Source/cmake/OptionsWin.cmake
+index 7ea8e8c62e7..e0c8407e556 100644
+--- a/Source/cmake/OptionsWin.cmake
++++ b/Source/cmake/OptionsWin.cmake
+@@ -107,6 +107,7 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_REMOTE_INSPECTOR PRIVATE ${ENABLE_EXPERI
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_RESOURCE_USAGE PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_VARIATION_FONTS PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEBDRIVER PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
++WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_WEBGPU PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
+
+ # No support planned
+ WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_FTPDIR PRIVATE OFF)

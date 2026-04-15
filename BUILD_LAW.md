@@ -1,5 +1,26 @@
 # BUILD LAW
 
+This is the build harness for **ng-webkit** (`github.com/maceip/ng-webkit`). It drives
+cross-platform WebKit builds (Windows, macOS, Android, Linux) from a single entrypoint:
+`./scripts/run-build.sh <platform> <id>`. Patches live under `patches/<platform>/` and
+are bundled + applied to a clean WebKit checkout for each build. The WebKit source fork
+used for experimental branches is `github.com/maceip/WebKit` — that is a separate repo
+from this one.
+
+## Priority order
+
+1. Drive the Windows build **green** using the standard entrypoint only: `./scripts/run-build.sh windows <id>` (bundled patches, SSM, artifacts)—fix blockers with ordered changes under `patches/windows/` (and shared patches if needed).
+2. **After** green, align auxiliary scripts, env samples, and docs with that harness so the same path stays the one true workflow—without letting harness churn displace compile/link fixes.
+
+### Windows build fix loop (until green)
+
+1. A **build error** appears (local driver log, synced remote log, or `BUILD_FAILED.txt` / S3 artifacts).
+2. Report **only the last ten** substantive error lines from that log (no extra narration).
+3. **Fix** by extending ordered patches under `patches/windows/` (and `patches/common/` when shared).
+4. **Build again** with `./scripts/run-build.sh windows <new-id>`. Repeat until green.
+
+**Assistant output during this loop:** after a failed build, the only user-facing content is those **ten lines** (then patches and a new build in the repo). Do not reply with affirmations of the loop, “yes,” or where the rule is stored—those are not step 2. If there is no failure log yet, do not invent filler; run or wait for the build, then apply step 2 when an error exists.
+
 ## Failure Record
 
 The Windows build work failed the reproducibility standard.

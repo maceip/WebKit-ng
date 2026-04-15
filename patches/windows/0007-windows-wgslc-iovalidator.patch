@@ -1,0 +1,12 @@
+diff --git a/Source/WebGPU/WGSL/CMakeLists.txt b/Source/WebGPU/WGSL/CMakeLists.txt
+index 104b21e6d6e..a1111111111 100644
+--- a/Source/WebGPU/WGSL/CMakeLists.txt
++++ b/Source/WebGPU/WGSL/CMakeLists.txt
+@@ -58,6 +58,7 @@ set(wgslc_SOURCES
+     EntryPointRewriter.cpp
+     GlobalSorting.cpp
+     GlobalVariableRewriter.cpp
++    IOValidator.cpp
+     Lexer.cpp
+     MangleNames.cpp
+     Overload.cpp

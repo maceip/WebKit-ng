@@ -15,6 +15,10 @@ case "$PLATFORM" in
   *) echo "Unknown platform: $PLATFORM" >&2; exit 2 ;;
 esac
 
-log "Starting $PLATFORM build $ID; log: $LOG"
-"$NG_ROOT/platforms/$PLATFORM/build.sh" "$ID" 2>&1 | tee "$LOG"
+# Single stream → one tee → avoids interleaved garbage if someone also runs: run-build … | tee "$LOG"
+# (two processes writing the same path byte-splice JSON/log lines together).
+{
+  log "Starting $PLATFORM build $ID; log: $LOG"
+  "$NG_ROOT/platforms/$PLATFORM/build.sh" "$ID"
+} 2>&1 | tee "$LOG"
 

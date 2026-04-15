@@ -1,0 +1,13 @@
+diff --git a/Source/WebGPU/WGSL/ConstantFunctions.h b/Source/WebGPU/WGSL/ConstantFunctions.h
+index 1111111..2222222 100644
+--- a/Source/WebGPU/WGSL/ConstantFunctions.h
++++ b/Source/WebGPU/WGSL/ConstantFunctions.h
+@@ -898,7 +898,7 @@ UNARY_OPERATION(Abs, Number, [&]<typename T>(T n) -> T {
+         return std::abs(n);
+ });
+ 
+-BINARY_OPERATION(Atan2, Float, WRAP_STD(atan2))
++BINARY_OPERATION(Atan2, Float, [&]<typename T>(T left, T right) -> T { return (std::atan2)(left, right); })
+ UNARY_OPERATION(Ceil, Float, WRAP_STD(ceil))
+ 
+ TERNARY_OPERATION(Clamp, Number, [&]<typename T>(T e, T low, T high) -> ConstantResult {

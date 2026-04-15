@@ -147,7 +147,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && parts[0] === 'builds' && parts.length === 1) {
       const payload = await body(req);
-      const platforms = payload.platforms || ['android', 'windows'];
+      const platforms = payload.platforms || ['android', 'windows', 'macos'];
       return json(res, 202, createBuild(platforms, payload));
     }
 

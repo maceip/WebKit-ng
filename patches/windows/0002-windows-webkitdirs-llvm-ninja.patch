@@ -1,0 +1,88 @@
+diff --git a/Tools/Scripts/webkitdirs.pm b/Tools/Scripts/webkitdirs.pm
+--- a/Tools/Scripts/webkitdirs.pm
++++ b/Tools/Scripts/webkitdirs.pm
+@@ -1153,6 +1153,68 @@
+     return $path;
+ }
+ 
++
++
++sub latestVisualStudioCompilerPath
++{
++    # Prefer the real LLVM install first; do not pick the lexicographically last
++    # glob match (e.g. Program Files (x86)/LLVM may sort after Program Files/LLVM but be absent).
++    my @candidates;
++    push @candidates, bsd_glob("C:/Program Files/LLVM/bin/clang-cl.exe");
++    push @candidates, bsd_glob("C:/Program Files (x86)/LLVM/bin/clang-cl.exe");
++    push @candidates, sort bsd_glob("C:/BuildTools/VC/Tools/Llvm/*/bin/clang-cl.exe");
++    for my $p (@candidates) {
++        next unless $p && -e $p;
++        $p =~ s|\\|/|g;
++        return $p;
++    }
++
++    my @clangMatches = sort bsd_glob(File::Spec->catfile($ENV{'VCPKG_ROOT'} || "", "downloads", "tools", "clang", "*", "bin", "clang-cl.exe"));
++    while (@clangMatches) {
++        my $p = pop @clangMatches;
++        next unless $p && -e $p;
++        $p =~ s|\\|/|g;
++        return $p;
++    }
++
++    if ($ENV{'VCToolsInstallDir'} && -e $ENV{'VCToolsInstallDir'} . "\\bin\\Hostx64\\x64\\cl.exe") {
++        my $path = $ENV{'VCToolsInstallDir'} . "\\bin\\Hostx64\\x64\\cl.exe";
++        $path =~ s|\\|/|g;
++        return $path;
++    }
++
++    my $installDir = visualStudioInstallDir();
++    return unless defined $installDir;
++
++    my @matches = sort bsd_glob(File::Spec->catfile($installDir, "VC", "Tools", "MSVC", "*", "bin", "Hostx64", "x64", "cl.exe"));
++    if (@matches) {
++        my $path = $matches[-1];
++        $path =~ s|\\|/|g;
++        return $path if -e $path;
++    }
++    return;
++}
++
++sub latestWindowsSdkBinaryPath($)
++{
++    my ($binaryName) = @_;
++    if ($ENV{'WindowsSdkDir'} && $ENV{'WindowsSDKVersion'}) {
++        my $candidate = File::Spec->catfile($ENV{'WindowsSdkDir'}, "bin", $ENV{'WindowsSDKVersion'}, "x64", $binaryName);
++        if (-e $candidate) {
++            $candidate =~ s|\\|/|g;
++            return $candidate;
++        }
++    }
++
++    my @matches = sort bsd_glob(File::Spec->catfile(programFilesPathX86(), "Windows Kits", "10", "bin", "*", "x64", $binaryName));
++    if (@matches) {
++        my $path = $matches[-1];
++        $path =~ s|\\|/|g;
++        return $path if -e $path;
++    }
++    return;
++}
++
+ sub determineConfigurationForVisualStudio
+ {
+     return if defined $configurationForVisualStudio;
+@@ -2904,6 +2966,15 @@
+     }
+ 
+     if ($willUseNinja) {
++        if (isWin()) {
++            my $clPath = latestVisualStudioCompilerPath();
++            my $rcPath = latestWindowsSdkBinaryPath("rc.exe");
++            my $mtPath = latestWindowsSdkBinaryPath("mt.exe");
++            push @args, '-DCMAKE_C_COMPILER="' . $clPath . '"' if $clPath && !defined $ENV{CC};
++            push @args, '-DCMAKE_CXX_COMPILER="' . $clPath . '"' if $clPath && !defined $ENV{CXX};
++            push @args, '-DCMAKE_RC_COMPILER="' . $rcPath . '"' if $rcPath;
++            push @args, '-DCMAKE_MT="' . $mtPath . '"' if $mtPath;
++        }
+         push @args, "-G";
+         if (canUseEclipseNinjaGenerator()) {
+             push @args, "'Eclipse CDT4 - Ninja'";

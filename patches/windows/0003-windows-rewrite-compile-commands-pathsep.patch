@@ -1,0 +1,27 @@
+diff --git a/Tools/Scripts/rewrite-compile-commands b/Tools/Scripts/rewrite-compile-commands
+--- a/Tools/Scripts/rewrite-compile-commands
++++ b/Tools/Scripts/rewrite-compile-commands
+@@ -62,7 +62,13 @@
+     # And Windows too:
+     # - WebKit\WebKitBuild\Release\WebCore\DerivedSources\unified-sources\UnifiedSource-42f7b70e-5.cpp
+     # So we extract the parent folders to map them to the source folders.
+-    parent_dir_1, parent_dir_2 = entry_file.rsplit(os.path.sep, maxsplit=4)[1:3]
++    # compile_commands.json may use '/' while os.path.sep is '\\' on Windows.
++    norm_file = entry_file.replace("/", os.path.sep)
++    parts = norm_file.rsplit(os.path.sep, 4)
++    if len(parts) < 5:
++        generated_compile_commands.append(entry)
++        continue
++    parent_dir_1, parent_dir_2 = parts[1:3]
+     search_directories = [
+         os.path.join(build_dir, parent_dir_1, parent_dir_2),
+     ]
+@@ -72,7 +78,7 @@
+     else:
+         search_directories.append(os.path.join(source_dir, 'Source', parent_dir_1))
+ 
+-    with open(entry_file) as f:
++    with open(norm_file) as f:
+         for line in f.readlines():
+             include_path = line[10:-2]  # Extract header from `#include "HEADER"\n`
+             for d in search_directories:

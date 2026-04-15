@@ -1,0 +1,14 @@
+diff --git a/Source/bmalloc/CMakeLists.txt b/Source/bmalloc/CMakeLists.txt
+--- a/Source/bmalloc/CMakeLists.txt
++++ b/Source/bmalloc/CMakeLists.txt
+@@ -649,6 +649,10 @@
+     list(APPEND bmalloc_LIBRARIES ${MALLOC_HEAP_BREAKDOWN_LIBRARIES})
+ endif ()
+ 
++if (WIN32)
++    list(APPEND bmalloc_DEFINITIONS _CRT_SECURE_NO_WARNINGS)
++endif ()
++
+ if (ATOMICS_REQUIRE_LIBATOMIC)
+     list(APPEND bmalloc_LIBRARIES atomic)
+ endif ()

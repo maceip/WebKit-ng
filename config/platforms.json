@@ -11,7 +11,7 @@
       "mode": "aws-ssm",
       "instanceEnv": "NG_WINDOWS_INSTANCE_ID",
       "artifactEnv": "NG_WINDOWS_ARTIFACT_S3",
-      "artifactPatterns": ["*.zip", "*.7z", "*.exe", "*.msi", "*.log"]
+      "artifactPatterns": ["*.zip", "*.tar.gz", "*.7z", "*.exe", "*.msi", "*.log"]
     },
     "linux": { "status": "empty" },
     "ios": { "status": "empty" },

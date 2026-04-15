@@ -1,0 +1,26 @@
+diff --git a/Source/WebGPU/WGSL/CMakeLists.txt b/Source/WebGPU/WGSL/CMakeLists.txt
+index e26e5a17470..104b21e6d6e 100644
+--- a/Source/WebGPU/WGSL/CMakeLists.txt
++++ b/Source/WebGPU/WGSL/CMakeLists.txt
+@@ -31,17 +31,20 @@
+ # Target 'wgsl-types' generates TypeDeclarations.h in the build tree.
+ add_custom_command(
+     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/TypeDeclarations.h
++           ${CMAKE_CURRENT_BINARY_DIR}/TypeOverloads.h
+     COMMAND ${Ruby_EXECUTABLE}
+         ${CMAKE_CURRENT_SOURCE_DIR}/generator/main.rb
+         ${CMAKE_CURRENT_SOURCE_DIR}/TypeDeclarations.rb
+         ${CMAKE_CURRENT_BINARY_DIR}/TypeDeclarations.h
++        ${CMAKE_CURRENT_BINARY_DIR}/TypeOverloads.h
+     DEPENDS
+         ${CMAKE_CURRENT_SOURCE_DIR}/generator/main.rb
+         ${CMAKE_CURRENT_SOURCE_DIR}/TypeDeclarations.rb
+     )
+ add_custom_target(wgsl-types
+     ALL
+-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/TypeDeclarations.h)
++    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/TypeDeclarations.h
++            ${CMAKE_CURRENT_BINARY_DIR}/TypeOverloads.h)
+
+ set(wgslc_SOURCES
+     AliasAnalysis.cpp
