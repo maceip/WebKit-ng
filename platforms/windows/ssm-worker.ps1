@@ -21,12 +21,18 @@ try {
   if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
     throw "remote-build.ps1 exited with code $LASTEXITCODE"
   }
-  $done = Join-Path $WorkDir "BUILD_DONE.txt"
-  "success $((Get-Date).ToUniversalTime().ToString('o'))" | Set-Content -Path $done -Encoding UTF8
+  "remote-build complete $((Get-Date).ToUniversalTime().ToString('o'))" |
+    Set-Content -Path (Join-Path $WorkDir "BUILD_READY.txt") -Encoding UTF8
   $art = Join-Path $WorkDir "artifacts"
   if (Test-Path $art) {
+    Write-Output "worker: syncing artifacts to $S3Prefix"
     & $AwsExe s3 sync $art $S3Prefix --exclude "*" --include "*.zip" --include "*.tar.gz" --include "*.json" --include "*.log" --include "*.html"
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+      throw "aws s3 sync exited with code $LASTEXITCODE"
+    }
   }
+  $done = Join-Path $WorkDir "BUILD_DONE.txt"
+  "success $((Get-Date).ToUniversalTime().ToString('o')) uploaded=$S3Prefix" | Set-Content -Path $done -Encoding UTF8
 } catch {
   $err = $_ | Out-String
   Write-Output "worker: CAUGHT ERROR: $err"

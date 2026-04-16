@@ -58,6 +58,42 @@ New-Item -ItemType Directory -Force -Path $config.workdir | Out-Null
 $artDir = Join-Path $config.workdir "artifacts"
 New-Item -ItemType Directory -Force -Path $artDir | Out-Null
 
+function Write-NinjaProgressFromLog {
+  param([string]$LogPath, [string]$ProgressPath)
+  if (-not (Test-Path $LogPath)) { return }
+  $tail = @(Get-Content $LogPath -Tail 8000 -ErrorAction SilentlyContinue)
+  if (-not $tail -or $tail.Count -eq 0) { return }
+  $text = $tail -join "`n"
+  $rx = [regex]'(?m)\[\s*(\d+)\s*/\s*(\d+)\s*\]'
+  $mm = $rx.Matches($text)
+  if ($mm.Count -eq 0) {
+    $early = [ordered]@{
+      phase     = "pre-ninja"
+      hint      = "Waiting for ninja [n/m] lines (CMake/configure or early build)"
+      updated   = (Get-Date).ToUniversalTime().ToString("o")
+      buildId   = $config.buildId
+    }
+    ($early | ConvertTo-Json -Compress) | Set-Content -Path $ProgressPath -Encoding UTF8
+    return
+  }
+  $last = $mm[$mm.Count - 1]
+  $done = [int]$last.Groups[1].Value
+  $total = [int]$last.Groups[2].Value
+  $pct = if ($total -gt 0) { [double][math]::Round(100.0 * $done / $total, 2) } else { 0 }
+  $lastLine = ($tail | Where-Object { $_ -match '\[\s*\d+\s*/\s*\d+\s*\]' } | Select-Object -Last 1)
+  if (-not $lastLine) { $lastLine = $last.Value }
+  $obj = [ordered]@{
+    done      = $done
+    total     = $total
+    percent   = $pct
+    lastLine  = $lastLine.Trim()
+    backend   = "ninja"
+    updated   = (Get-Date).ToUniversalTime().ToString("o")
+    buildId   = $config.buildId
+  }
+  ($obj | ConvertTo-Json -Compress) | Set-Content -Path $ProgressPath -Encoding UTF8
+}
+
 function Invoke-BuildCmd {
   param([string]$VsDevCmd, [string]$WorkingDir, [string]$CmdLine)
   # VsDevCmd resets PATH; re-apply toolchain dirs inside the same cmd session (perl, git, ninja, ...).
@@ -68,6 +104,7 @@ function Invoke-BuildCmd {
     $pp = $config.pathPrepend + ";"
   }
   $logFile = Join-Path $artDir ("build-webkit-" + $config.buildId + ".log")
+  $progressPath = Join-Path $artDir "build-progress.json"
   $batchPath = Join-Path $artDir ("invoke-build-" + $config.buildId + ".cmd")
   $lines = [System.Collections.Generic.List[string]]::new()
   $vcpkgRoot = "C:\vcpkg"
@@ -81,12 +118,61 @@ function Invoke-BuildCmd {
   [void]$lines.Add("cd /d `"$WorkingDir`"")
   [void]$lines.Add("$CmdLine >> `"$logFile`" 2>&1")
   [System.IO.File]::WriteAllLines($batchPath, $lines)
-  # Do NOT use Start-Process -NoNewWindow -Wait: PowerShell 5.1 hangs indefinitely
-  # in headless SYSTEM sessions even after cmd.exe exits. Use -PassThru + WaitForExit() instead.
-  $p = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $batchPath) -PassThru
-  $p.WaitForExit()
-  if ($p.ExitCode -ne 0) {
-    throw "Build command failed with exit $($p.ExitCode) - see $logFile"
+  $pollSec = 15
+  $progressJob = Start-Job -ScriptBlock {
+    param($LogPath, $ProgressPath, $PollSec, $BuildId)
+    $rx = [regex]'(?m)\[\s*(\d+)\s*/\s*(\d+)\s*\]'
+    while ($true) {
+      try {
+        if (Test-Path $LogPath) {
+          $tail = @(Get-Content $LogPath -Tail 8000 -ErrorAction SilentlyContinue)
+          if ($tail -and $tail.Count -gt 0) {
+            $text = $tail -join "`n"
+            $mm = $rx.Matches($text)
+            if ($mm.Count -gt 0) {
+              $last = $mm[$mm.Count - 1]
+              $done = [int]$last.Groups[1].Value
+              $total = [int]$last.Groups[2].Value
+              $pct = if ($total -gt 0) { [double][math]::Round(100.0 * $done / $total, 2) } else { 0 }
+              $lastLine = ($tail | Where-Object { $_ -match '\[\s*\d+\s*/\s*\d+\s*\]' } | Select-Object -Last 1)
+              if (-not $lastLine) { $lastLine = $last.Value }
+              $obj = [ordered]@{
+                done      = $done
+                total     = $total
+                percent   = $pct
+                lastLine  = $lastLine.Trim()
+                backend   = "ninja"
+                updated   = (Get-Date).ToUniversalTime().ToString("o")
+                buildId   = $BuildId
+              }
+              ($obj | ConvertTo-Json -Compress) | Set-Content -Path $ProgressPath -Encoding UTF8
+            } else {
+              $early = [ordered]@{
+                phase     = "pre-ninja"
+                hint      = "Waiting for ninja [n/m] lines (CMake/configure or early build)"
+                updated   = (Get-Date).ToUniversalTime().ToString("o")
+                buildId   = $BuildId
+              }
+              ($early | ConvertTo-Json -Compress) | Set-Content -Path $ProgressPath -Encoding UTF8
+            }
+          }
+        }
+      } catch { }
+      Start-Sleep -Seconds $PollSec
+    }
+  } -ArgumentList $logFile, $progressPath, $pollSec, $config.buildId
+  try {
+    # Do NOT use Start-Process -NoNewWindow -Wait: PowerShell 5.1 hangs indefinitely
+    # in headless SYSTEM sessions even after cmd.exe exits. Use -PassThru + WaitForExit() instead.
+    $p = Start-Process -FilePath "cmd.exe" -ArgumentList @("/c", $batchPath) -PassThru
+    $p.WaitForExit()
+    if ($p.ExitCode -ne 0) {
+      throw "Build command failed with exit $($p.ExitCode) - see $logFile"
+    }
+  } finally {
+    Stop-Job -Job $progressJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $progressJob -Force -ErrorAction SilentlyContinue
+    Write-NinjaProgressFromLog -LogPath $logFile -ProgressPath $progressPath
   }
 }
 
@@ -203,8 +289,19 @@ $cmakeLines = Get-Content $cache | Where-Object {
 }
 $webgpuEnabled = ($cmakeLines | Where-Object { $_ -match 'ENABLE_WEBGPU:BOOL=ON' }).Count -gt 0
 
-# --- Self-heal: copy webgpu_dawn.dll from vcpkg if missing ---
+# --- Self-heal: copy Dawn runtime DLLs from this build's vcpkg tree ---
 if ($webgpuEnabled) {
+  $vcpkgBin = Join-Path $out "vcpkg_installed\x64-windows-webkit\bin"
+  if (Test-Path $vcpkgBin) {
+    Get-ChildItem $vcpkgBin -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+      $target = Join-Path $bin $_.Name
+      if (-not (Test-Path $target)) {
+        Copy-Item $_.FullName $target -Force
+        Write-Host "Copied runtime DLL from vcpkg: $($_.Name)"
+      }
+    }
+  }
+
   $dawnDll = Join-Path $bin "webgpu_dawn.dll"
   if (-not (Test-Path $dawnDll)) {
     $vcpkgDawn = "C:/vcpkg/installed/x64-windows-webkit/bin/webgpu_dawn.dll"
@@ -212,6 +309,16 @@ if ($webgpuEnabled) {
       Copy-Item $vcpkgDawn $dawnDll -Force
       Write-Host "Copied webgpu_dawn.dll from vcpkg"
     }
+  }
+
+  # Dawn and Abseil are ABI-tied by Abseil's inline namespace. Some builder
+  # states have WebKit's private vcpkg tree on abseil lts_20250814 while the
+  # installed Dawn DLL imports lts_20260107 symbols. Prefer the matching global
+  # vcpkg Abseil DLL whenever present so webgpu_dawn.dll can load.
+  $globalAbseil = "C:/vcpkg/installed/x64-windows-webkit/bin/abseil_dll.dll"
+  if (Test-Path $globalAbseil) {
+    Copy-Item $globalAbseil (Join-Path $bin "abseil_dll.dll") -Force
+    Write-Host "Copied Dawn-matching abseil_dll.dll from global vcpkg"
   }
 }
 
@@ -347,18 +454,27 @@ $validationPath = Join-Path $config.workdir "validation-report.json"
 $validation | ConvertTo-Json -Depth 10 | Set-Content -Path $validationPath -Encoding UTF8
 Write-Host "Validation written to $validationPath"
 
+$cmakeCacheSummaryPath = Join-Path $config.workdir "cmake-cache-summary.txt"
+@($cmakeLines) | Set-Content -Path $cmakeCacheSummaryPath -Encoding UTF8
+
+# Keep the post manifest deliberately small and acyclic. ConvertTo-Json can spend
+# unbounded time walking PowerShell objects if a native command/job object leaks
+# into this graph, and previous green builds were stranded here before upload.
 $post = [ordered]@{
   miniBrowserSha256 = $mbh.Hash
-  cmakeCacheLines = @($cmakeLines)
   webgpuEnabled = $webgpuEnabled
-  validation = $validation
+  validationReport = "validation-report.json"
+  cmakeCacheSummary = "cmake-cache-summary.txt"
 }
 $postPath = Join-Path $config.workdir "manifest-post.json"
+Write-Host "Writing post manifest to $postPath"
 $post | ConvertTo-Json -Depth 10 | Set-Content -Path $postPath -Encoding UTF8
+Write-Host "Post manifest written"
 
 Copy-Item $prePath $artDir
 Copy-Item $postPath $artDir
 Copy-Item $validationPath $artDir
+Copy-Item $cmakeCacheSummaryPath $artDir
 if ($config.bootstrap -and (Test-Path $config.bootstrap)) {
   Copy-Item (Join-Path $config.bootstrap "*.log") $artDir -ErrorAction SilentlyContinue
 }
@@ -367,9 +483,11 @@ if ($config.bootstrap -and (Test-Path $config.bootstrap)) {
 # instead of Compress-Archive which is single-threaded and hangs on large directories.
 $binDir = Join-Path $out "bin"
 $archivePath = Join-Path $artDir ("ng-webkit-windows-" + $config.buildId + ".tar.gz")
+Write-Host "Creating archive $archivePath from $binDir"
 Push-Location $binDir
 tar -czf $archivePath .
 Pop-Location
 if (-not (Test-Path $archivePath)) {
   throw "Archive creation failed: $archivePath"
 }
+Write-Host "Archive created: $archivePath"

@@ -2,12 +2,13 @@
 
 Build orchestration for patched WebKit/WPE WebKit targets.
 
-## Build status (2026-04-15)
+## Build status (2026-04-16)
 
 Latest builds, newest first:
 
 | When (UTC)          | Platform       | Build id                                   | Result    | Notes |
 | ------------------- | -------------- | ------------------------------------------ | --------- | ----- |
+| 2026-04-16 02:26    | Windows+WebGPU | `dawn-d3d12-runtime-20260416T011849Z`      | ✅ **green** | 33m 55s compile, artifact uploaded, `webgpu_dawn.dll` load fixed with matching Abseil DLL |
 | 2026-04-15 15:16    | macOS          | `macos-clean-20260415T151654Z`             | ❌ failed  | libwebrtc `network_constants.h` -Wconstant-conversion under Xcode 16, fix in flight |
 | 2026-04-15 14:54    | Windows+WebGPU | `dawn-iovalidator-20260415T145405Z`        | ✅ **green** | 33m 29s, all 9551 targets, `ENABLE_WEBGPU=ON`, tar in S3 ([download](#downloads)) |
 | 2026-04-15 14:54    | macOS          | `macos-parallel-20260415T145430Z`          | ❌ failed  | (other agent) concurrent build collision with mine |
@@ -37,11 +38,11 @@ history.
 
 ## Downloads
 
-The most recent green Windows + WebGPU tarball (523 MB, extract on a Windows
+The most recent green Windows + WebGPU tarball (537 MiB, extract on a Windows
 host with D3D12/Vulkan):
 
 ```bash
-aws s3 cp s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-iovalidator-20260415T145405Z/ng-webkit-windows-webgpu-dawn-iovalidator-20260415T145405Z.tar.gz \
+aws s3 cp s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-d3d12-runtime-20260416T011849Z/ng-webkit-windows-dawn-d3d12-runtime-20260416T011849Z.tar.gz \
   . --region eu-central-1
 ```
 
@@ -79,6 +80,9 @@ Windows WebGPU runtime service work belongs in
 `changes/windows-webgpu-service`, not in generic Windows compiler/build patches.
 Enable it in `config/changes.json` only for builds intended to validate the
 custom service path.
+
+Windows WebGPU/Dawn repeatability notes live in
+[`platforms/windows/webgpu-dawn-runbook.md`](./platforms/windows/webgpu-dawn-runbook.md).
 
 For the current Windows WebGPU runtime investigation, use:
 

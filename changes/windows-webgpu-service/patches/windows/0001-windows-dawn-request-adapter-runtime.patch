@@ -124,7 +124,7 @@ index 000000000000..29571239a655
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnAdapterHandle = struct WGPUAdapterImpl*;
++using WindowsDawnAdapterHandle = void*;
 +
 +class WindowsDawnAdapter final : public Adapter {
 +public:
@@ -151,7 +151,7 @@ new file mode 100644
 index 000000000000..c20c665a829c
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUWindowsDawnGPU.cpp
-@@ -0,0 +1,193 @@
+@@ -0,0 +1,198 @@
 +/*
 + * Copyright (C) 2026 mce Systems Ltd. All rights reserved.
 + *
@@ -191,7 +191,7 @@ index 000000000000..c20c665a829c
 +namespace WebCore::WebGPU {
 +
 +using CreateInstanceFunction = WindowsDawnInstanceHandle (*)(const WGPUInstanceDescriptor*);
-+using RequestAdapterFunction = void (*)(WindowsDawnInstanceHandle, const WGPURequestAdapterOptions*, WGPURequestAdapterCallback, void*);
++using RequestAdapterFunction = WGPUFuture (*)(WindowsDawnInstanceHandle, const WGPURequestAdapterOptions*, WGPURequestAdapterCallbackInfo);
 +using ProcessEventsFunction = void (*)(WindowsDawnInstanceHandle);
 +using ReleaseAdapterFunction = void (*)(WindowsDawnAdapterHandle);
 +
@@ -312,6 +312,16 @@ index 000000000000..c20c665a829c
 +    ReleaseAdapterFunction releaseAdapter { nullptr };
 +};
 +
++static void requestAdapterCallback(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView, void* userdata1, void*)
++{
++    std::unique_ptr<RequestAdapterContext> context { static_cast<RequestAdapterContext*>(userdata1) };
++    if (status == requestAdapterStatusSuccess && adapter) {
++        context->callback(WindowsDawnAdapter::create(adapter, context->releaseAdapter));
++        return;
++    }
++    context->callback(nullptr);
++}
++
 +void WindowsDawnGPU::requestAdapter(const RequestAdapterOptions& options, CompletionHandler<void(RefPtr<Adapter>&&)>&& callback)
 +{
 +    auto& dawn = DawnLibrary::singleton();
@@ -320,23 +330,18 @@ index 000000000000..c20c665a829c
 +        return;
 +    }
 +
-+    WGPURequestAdapterOptions backingOptions {
-+        .compatibleSurface = nullptr,
-+        .powerPreference = toWGPUPowerPreference(options),
-+        .backendType = windowsDawnBackendType(),
-+        .forceFallbackAdapter = options.forceFallbackAdapter,
-+        .xrCompatible = options.xrCompatible,
-+    };
++    WGPURequestAdapterOptions backingOptions { };
++    backingOptions.powerPreference = toWGPUPowerPreference(options);
++    backingOptions.forceFallbackAdapter = options.forceFallbackAdapter ? WGPU_TRUE : WGPU_FALSE;
++    backingOptions.backendType = windowsDawnBackendType();
++    backingOptions.compatibleSurface = nullptr;
 +
 +    auto* context = new RequestAdapterContext { WTF::move(callback), dawn.releaseAdapter() };
-+    dawn.requestAdapter()(m_instance, &backingOptions, [](WGPURequestAdapterStatus status, WindowsDawnAdapterHandle adapter, const char*, void* userdata) {
-+        std::unique_ptr<RequestAdapterContext> context { static_cast<RequestAdapterContext*>(userdata) };
-+        if (status == requestAdapterStatusSuccess && adapter) {
-+            context->callback(WindowsDawnAdapter::create(adapter, context->releaseAdapter));
-+            return;
-+        }
-+        context->callback(nullptr);
-+    }, context);
++    WGPURequestAdapterCallbackInfo callbackInfo { };
++    callbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
++    callbackInfo.callback = requestAdapterCallback;
++    callbackInfo.userdata1 = context;
++    dawn.requestAdapter()(m_instance, &backingOptions, callbackInfo);
 +
 +    if (dawn.processEvents())
 +        dawn.processEvents()(m_instance);
@@ -385,7 +390,7 @@ index 000000000000..6105c841d3de
 +
 +namespace WebCore::WebGPU {
 +
-+using WindowsDawnInstanceHandle = struct WGPUInstanceImpl*;
++using WindowsDawnInstanceHandle = void*;
 +
 +class WindowsDawnGPU final : public GPU, public RefCounted<WindowsDawnGPU> {
 +public:
@@ -453,7 +458,7 @@ index 72b2846f2c82..a4cf37340d72 100644
      "${WEBCORE_DIR}/page/win"
      "${WEBCORE_DIR}/platform/graphics/egl"
      "${WEBCORE_DIR}/platform/graphics/opengl"
-@@ -29,6 +30,13 @@ list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
+@@ -29,6 +30,16 @@ list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
      "${WEBCORE_DIR}/platform/win"
  )
  
@@ -461,6 +466,9 @@ index 72b2846f2c82..a4cf37340d72 100644
 +    list(APPEND WebCore_SOURCES
 +        Modules/WebGPU/Implementation/WebGPUWindowsDawnAdapter.cpp
 +        Modules/WebGPU/Implementation/WebGPUWindowsDawnGPU.cpp
++    )
++    list(APPEND WebCore_LIBRARIES
++        Dawn::dawn
 +    )
 +endif ()
 +

@@ -41,9 +41,12 @@ s3://<bucket>/
 
 ### Windows — WebGPU + Dawn enabled (canonical)
 
-- `s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-iovalidator-20260415T145405Z/ng-webkit-windows-webgpu-dawn-iovalidator-20260415T145405Z.tar.gz`
-- 523.3 MB, contains 37 DLLs + 23 EXEs from `bin/`
-- `ENABLE_WEBGPU:BOOL=ON` in CMakeCache, Dawn resolved via vcpkg
+- `s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-d3d12-runtime-20260416T011849Z/ng-webkit-windows-dawn-d3d12-runtime-20260416T011849Z.tar.gz`
+- 537.0 MiB, contains the `bin/` directory after WebGPU/Dawn runtime DLL
+  packaging.
+- `ENABLE_WEBGPU:BOOL=ON` in CMakeCache, Dawn resolved via vcpkg.
+- `validation-recovered.json` records `webgpu_dawn.dll` loading successfully
+  after packaging the Abseil DLL that matches Dawn's `lts_20260107` ABI.
 
 ### Windows — baseline (no WebGPU)
 
@@ -71,15 +74,15 @@ No successful artifact yet. Build failures are retained for post-mortem:
 
 ```bash
 # List everything in a build
-aws s3 ls s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-iovalidator-20260415T145405Z/ \
+aws s3 ls s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-d3d12-runtime-20260416T011849Z/ \
   --region eu-central-1
 
 # Download the tar.gz
-aws s3 cp s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-iovalidator-20260415T145405Z/ng-webkit-windows-webgpu-dawn-iovalidator-20260415T145405Z.tar.gz \
+aws s3 cp s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-d3d12-runtime-20260416T011849Z/ng-webkit-windows-dawn-d3d12-runtime-20260416T011849Z.tar.gz \
   . --region eu-central-1
 
 # Generate a 7-day presigned URL for someone who does not have credentials
-aws s3 presign s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-iovalidator-20260415T145405Z/ng-webkit-windows-webgpu-dawn-iovalidator-20260415T145405Z.tar.gz \
+aws s3 presign s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-d3d12-runtime-20260416T011849Z/ng-webkit-windows-dawn-d3d12-runtime-20260416T011849Z.tar.gz \
   --region eu-central-1 --expires-in 604800
 ```
 
@@ -90,5 +93,8 @@ custom bucket or prefix can be used without code changes:
 
 - `NG_ARTIFACT_BUCKET` — default
   `s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit`
+- `NG_ARTIFACT_UPLOAD_REGION` — passed to `aws s3 cp` for uploads (defaults to
+  `eu-central-1` for this bucket; set empty to omit `--region`). Aligns with the
+  Windows bootstrap download of the patch bundle.
 - `NG_WINDOWS_ARTIFACT_S3` — full prefix override for Windows
 - `NG_MACOS_ARTIFACT_S3` — full prefix override for macOS

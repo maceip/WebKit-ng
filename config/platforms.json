@@ -11,7 +11,30 @@
       "mode": "aws-ssm",
       "instanceEnv": "NG_WINDOWS_INSTANCE_ID",
       "artifactEnv": "NG_WINDOWS_ARTIFACT_S3",
-      "artifactPatterns": ["*.zip", "*.tar.gz", "*.7z", "*.exe", "*.msi", "*.log"]
+      "artifactPatterns": ["*.zip", "*.tar.gz", "*.7z", "*.exe", "*.msi", "*.log", "*.json", "*.html"],
+      "presets": {
+        "webgpu-dawn": {
+          "description": "Windows WebGPU/Dawn build on the iangrunert Gigacage/Skia fixes branch.",
+          "env": {
+            "NG_WINDOWS_SOURCE_PRESET": "iangrunert-win-gigacage-skia-fixes",
+            "NG_WINDOWS_ENABLE_WEBGPU": "1"
+          },
+          "validationArtifacts": [
+            "validation-report.json",
+            "validation-recovered.json",
+            "manifest-pre.json",
+            "manifest-post.json",
+            "build-progress.json"
+          ],
+          "acceptance": [
+            "CMakeCache contains ENABLE_WEBGPU:BOOL=ON",
+            "webgpu_dawn.dll is packaged next to MiniBrowser.exe",
+            "webgpu_dawn.dll loads with LOAD_WITH_ALTERED_SEARCH_PATH",
+            "packaged abseil_dll.dll matches Dawn's Abseil inline namespace",
+            "BUILD_DONE.txt is written only after S3 sync succeeds"
+          ]
+        }
+      }
     },
     "linux": { "status": "empty" },
     "ios": { "status": "empty" },

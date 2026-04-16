@@ -50,7 +50,7 @@ fi
 # Override fully with NG_WINDOWS_BUILD_INNER if needed.
 _WIN_BASE='perl Tools\Scripts\build-webkit --release --win -DCMAKE_C_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_C_FLAGS=-D_CRT_SECURE_NO_WARNINGS -DCMAKE_CXX_FLAGS=-D_CRT_SECURE_NO_WARNINGS'
 if [[ "${NG_WINDOWS_ENABLE_WEBGPU:-0}" == "1" ]]; then
-  BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE} -DENABLE_EXPERIMENTAL_FEATURES=ON -DENABLE_WEBGPU=ON}"
+  BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE} --webgpu -DENABLE_EXPERIMENTAL_FEATURES=ON}"
 else
   BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE}}"
 fi
@@ -161,6 +161,9 @@ PATCH_BUNDLE="$NG_ARTIFACT_DIR/windows-patches-$ID.tar.gz"
 tar -C "$(dirname "$STAGE")" -czf "$PATCH_BUNDLE" "$(basename "$STAGE")"
 PATCH_URI="$("$NG_ROOT/scripts/upload-artifact.sh" "$PATCH_BUNDLE" "$S3_PREFIX/input")"
 
+# Must match upload-artifact.sh / Windows download (same PermanentRedirect issue).
+S3_CP_REGION="${NG_ARTIFACT_UPLOAD_REGION:-eu-central-1}"
+
 REMOTE_PS=$(cat <<EOF
 \$ErrorActionPreference = "Stop"
 \$awsExe = Join-Path \$env:ProgramFiles "Amazon\\AWSCLIV2\\aws.exe"
@@ -169,14 +172,20 @@ if (-not (Test-Path \$awsExe)) { throw "AWS CLI not found at \$awsExe - install 
 \$b = '$WORKDIR'
 New-Item -ItemType Directory -Force -Path \$b | Out-Null
 Set-Location \$b
-& \$awsExe s3 cp "$PATCH_URI" .\\bundle.tar.gz
+& \$awsExe s3 cp "$PATCH_URI" .\\bundle.tar.gz --region $S3_CP_REGION
 tar -xzf .\\bundle.tar.gz
 \$root = Join-Path \$b '$(basename "$STAGE")'
 \$worker = Join-Path \$root "ssm-worker.ps1"
 if (-not (Test-Path \$worker)) { throw "ssm-worker.ps1 missing in bundle at \$worker" }
 \$s3p = "$S3_PREFIX"
-\$argList = "-NoProfile -ExecutionPolicy Bypass -File \`"\$worker\`" -WorkDir \`"\$b\`" -BundleRoot \`"\$root\`" -S3Prefix \`"\$s3p\`" -AwsExe \`"\$awsExe\`""
-\$proc = Start-Process -FilePath powershell.exe -ArgumentList \$argList -WorkingDirectory \$b -WindowStyle Hidden -PassThru
+\$q = [char]34
+\$argList = "-NoProfile -ExecutionPolicy Bypass -File " + \$q + \$worker + \$q + " -WorkDir " + \$q + \$b + \$q + " -BundleRoot " + \$q + \$root + \$q + " -S3Prefix " + \$q + \$s3p + \$q + " -AwsExe " + \$q + \$awsExe + \$q
+\$proc = Start-Process -FilePath powershell.exe -ArgumentList \$argList -WorkingDirectory \$b -PassThru
+Start-Sleep -Seconds 3
+\$workerState = Get-Process -Id \$proc.Id -ErrorAction SilentlyContinue
+if (-not \$workerState) {
+  throw "Detached worker exited immediately before creating a durable build process."
+}
 "worker_pid=\$(\$proc.Id) started=\$((Get-Date).ToUniversalTime().ToString('o'))" | Set-Content -Path (Join-Path \$b "worker-start.log") -Encoding UTF8
 Write-Output "BOOTSTRAP_OK worker_pid=\$(\$proc.Id)"
 EOF
@@ -216,6 +225,7 @@ echo "$BOOT_INV"
 BOOT_STATUS="$(echo "$BOOT_INV" | python3 -c "import json,sys; print(json.load(sys.stdin).get('Status',''))")"
 if [[ "$BOOT_STATUS" != "Success" ]]; then
   log "Bootstrap SSM did not succeed (Status=$BOOT_STATUS); not polling worker."
+  "$NG_ROOT/scripts/notify.sh" "ng-webkit Windows bootstrap SSM FAILED build=$ID status=$BOOT_STATUS command=$COMMAND_ID"
   exit 1
 fi
 

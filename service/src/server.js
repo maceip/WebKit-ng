@@ -48,11 +48,53 @@ async function body(req) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+function normalizeStringRecord(value, label) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be an object of string keys and string/number/boolean values`);
+  }
+
+  const result = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`${label}.${key} is not a valid environment variable name`);
+    }
+    if (raw === undefined || raw === null) continue;
+    if (!['string', 'number', 'boolean'].includes(typeof raw)) {
+      throw new Error(`${label}.${key} must be a string, number, or boolean`);
+    }
+    result[key] = String(raw);
+  }
+  return result;
+}
+
+function validateBuildEnvPayload(payload) {
+  normalizeStringRecord(payload.env, 'env');
+  const platformEnv = payload.platformEnv || {};
+  if (typeof platformEnv !== 'object' || Array.isArray(platformEnv)) {
+    throw new Error('platformEnv must be an object keyed by platform');
+  }
+  for (const [platform, env] of Object.entries(platformEnv)) {
+    normalizeStringRecord(env, `platformEnv.${platform}`);
+  }
+}
+
+function buildEnvForPlatform(build, platform) {
+  const request = build.request || {};
+  return {
+    ...process.env,
+    ...normalizeStringRecord(request.env, 'env'),
+    ...normalizeStringRecord(request.platformEnv?.[platform], `platformEnv.${platform}`),
+    NG_SERVICE_BUILD_ID: build.id,
+    NG_SERVICE_PLATFORM: platform
+  };
+}
+
 function startPlatformBuild(build, platform) {
   const logPath = join(logDir, `${build.id}-${platform}.service.log`);
   const child = spawn(join(root, 'scripts', 'run-build.sh'), [platform, build.id], {
     cwd: root,
-    env: { ...process.env, NG_SERVICE_BUILD_ID: build.id },
+    env: buildEnvForPlatform(build, platform),
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -122,8 +164,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && parts.length === 0) {
       return json(res, 200, {
         name: 'ng-webkit build service',
-        endpoints: ['GET /builds', 'POST /builds', 'GET /builds/:id', 'POST /builds/:id/restart', 'POST /builds/:id/checkpoint', 'POST /builds/:id/cancel']
+        endpoints: ['GET /platforms', 'GET /builds', 'POST /builds', 'GET /builds/:id', 'POST /builds/:id/restart', 'POST /builds/:id/checkpoint', 'POST /builds/:id/cancel']
       });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'platforms' && parts.length === 1) {
+      return json(res, 200, readJsonFile(join(root, 'config', 'platforms.json')));
     }
 
     if (req.method === 'GET' && parts[0] === 'builds' && parts.length === 1) {
@@ -148,6 +194,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && parts[0] === 'builds' && parts.length === 1) {
       const payload = await body(req);
       const platforms = payload.platforms || ['android', 'windows', 'macos'];
+      validateBuildEnvPayload(payload);
       return json(res, 202, createBuild(platforms, payload));
     }
 
@@ -184,6 +231,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST' && parts[2] === 'restart') {
         const payload = await body(req);
         const platforms = payload.platforms || build.platforms.map((platform) => platform.name);
+        validateBuildEnvPayload(payload);
         return json(res, 202, createBuild(platforms, { reason: `restart of ${build.id}`, restartedFrom: build.id, ...payload }));
       }
     }

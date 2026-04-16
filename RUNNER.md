@@ -5,14 +5,15 @@ The runner is a small Node.js HTTP service in `service/` that turns
 the same way: create a build id, spawn the platform shell script, tail its log
 into `var/logs/`, and record state in `var/state.json`.
 
-## Current state (2026-04-15)
+## Current state (2026-04-16)
 
 - **REST API**: implemented (`service/src/server.js`, port 8787).
 - **Web UI**: not yet built. The API is consumable from curl today; a minimal
   HTML + vanilla JS frontend is the next item on the roadmap.
-- **Windows**: green via `run-build.sh windows <id>` with 7 bundled patches,
-  including WebGPU/Dawn enabled. Detached worker + marker poll, hangs and
-  silent deaths are all fixed.
+- **Windows**: green via `run-build.sh windows <id>` with WebGPU/Dawn enabled
+  on the iangrunert Gigacage/Skia fixes branch. Detached worker, marker poll,
+  packaging, S3 upload, Dawn DLL load validation, and the Abseil/Dawn ABI
+  packaging fix are now captured in repo-owned scripts.
 - **macOS**: harness in place (launchctl-based detached worker, marker poll),
   but the build itself is currently failing on a libwebrtc
   `-Wconstant-conversion` error. Fix in progress (cast to `uint16_t` in
@@ -23,6 +24,7 @@ into `var/logs/`, and record state in `var/state.json`.
 
 ```
 GET  /                              service info + endpoint list
+GET  /platforms                     config/platforms.json, including presets
 GET  /builds                        list all builds (from var/state.json)
 POST /builds                        start a new build
 GET  /builds/:id                    get a single build
@@ -33,6 +35,10 @@ POST /builds/:id/restart            re-run the same build id
 GET  /changes                       config/changes.json contents
 GET  /dependencies                  config/dependencies.json + catalog
 ```
+
+### Alerts (fail fast, not “inference”)
+
+`scripts/notify.sh` runs on **bootstrap SSM failure**, **remote `BUILD_FAILED.txt`**, **marker poll timeout**, **unexpected marker output**, and (Windows only) **RUNNING with no `artifacts/` after `NG_WINDOWS_ALERT_AFTER_POLLS` polls** (~90s × N by default). Set `NG_ALERT_WEBHOOK_URL` (Slack-compatible `{"text":...}`) and/or `NG_ALERT_CMD` in `.env`. Bell + loud stderr line always.
 
 ### Starting a build
 
@@ -46,6 +52,20 @@ curl -X POST http://localhost:8787/builds \
 curl -X POST http://localhost:8787/builds \
   -H 'content-type: application/json' \
   -d '{"platforms": ["windows"], "reason": "windows fix-check"}'
+
+# Windows WebGPU/Dawn lane, without depending on the service process env
+curl -X POST http://localhost:8787/builds \
+  -H 'content-type: application/json' \
+  -d '{
+    "platforms": ["windows"],
+    "reason": "windows webgpu dawn repeatability",
+    "platformEnv": {
+      "windows": {
+        "NG_WINDOWS_SOURCE_PRESET": "iangrunert-win-gigacage-skia-fixes",
+        "NG_WINDOWS_ENABLE_WEBGPU": "1"
+      }
+    }
+  }'
 ```
 
 The service creates a build id (timestamp + random), forks
@@ -53,10 +73,9 @@ The service creates a build id (timestamp + random), forks
 `202 Accepted` with the build record. Status flips from `running` to
 `succeeded` / `failed` / `cancelled` when each child exits.
 
-> **Gap**: the service does not yet pass per-build environment variables
-> through to the child (e.g. `NG_WINDOWS_ENABLE_WEBGPU=1`). Today that flag is
-> set on the shell that starts the service. The next iteration will accept an
-> `env` object in the POST body and forward it into the spawn.
+`POST /builds` accepts `env` for all platform children and `platformEnv` for a
+specific platform. Values are validated as environment-variable-safe string,
+number, or boolean values and are persisted in the build request.
 
 ## Build pipeline (per platform)
 
@@ -109,6 +128,29 @@ or a marker-poll probe). Long-running xcodebuild/ninja sessions run
   `0004` teaches `FindDawn.cmake` to look for those names and enables
   `ENABLE_WEBGPU` in `OptionsWin.cmake` (the upstream option is `PRIVATE`
   and cannot be overridden from the command line).
+- WebGPU must be enabled through WebKit's feature plumbing:
+  `--webgpu -DENABLE_EXPERIMENTAL_FEATURES=ON`. A bare
+  `-DENABLE_WEBGPU=ON` can be overwritten because the Win port declares the
+  option `PRIVATE`.
+- `BUILD_DONE.txt` is an upload-complete marker, not a compile-complete marker.
+  The worker writes `BUILD_READY.txt` after `remote-build.ps1` returns, syncs
+  artifacts to S3, and only then writes `BUILD_DONE.txt`.
+- Keep `manifest-post.json` small. A previous green compile wedged after
+  validation while PowerShell serialized a larger object graph. Full validation
+  lives in `validation-report.json`; `manifest-post.json` links to it.
+- Dawn runtime DLLs are not just "copy all DLLs from the build vcpkg tree".
+  `webgpu_dawn.dll` imports Abseil symbols with an inline namespace. On the
+  2026-04-16 green run, the build-local Abseil DLL was `lts_20250814` while
+  Dawn needed `lts_20260107`. The packaging step now prefers
+  `C:\vcpkg\installed\x64-windows-webkit\bin\abseil_dll.dll` when present and
+  validates `webgpu_dawn.dll` with `LoadLibraryEx(..., LOAD_WITH_ALTERED_SEARCH_PATH)`.
+- Canonical repeatable command:
+
+  ```bash
+  NG_WINDOWS_SOURCE_PRESET=iangrunert-win-gigacage-skia-fixes \
+  NG_WINDOWS_ENABLE_WEBGPU=1 \
+  ./scripts/run-build.sh windows <build-id>
+  ```
 
 ### macOS (`i-092d7452a5deac519`, `eu-central-1`)
 
@@ -156,16 +198,14 @@ or a marker-poll probe). Long-running xcodebuild/ninja sessions run
 1. **Web UI**. Plain HTML served from the Node service, with a row per build,
    a platform selector, expand-to-view logs, and a download button that hits
    the S3 artifact directly. The API can already drive it.
-2. **Per-build env override**. `POST /builds` should accept an `env` object
-   so WebGPU can be toggled per build from the UI without restarting the
-   service.
-3. **Validation phase**. After a build, actually run `MiniBrowser.exe` / the
+2. **Validation phase hardening**. After a build, actually run `MiniBrowser.exe` / the
    macOS `MiniBrowser.app` with a probe HTML that reports `navigator.gpu`
    state to a local HTTP listener, and attach the JSON result to the
-   artifacts. Scoped but not yet shipped.
-4. **macOS green**. Currently blocked on `libwebrtc`
+   artifacts. Windows now writes the probe and DLL-load JSON; the WebGPU page
+   callback still needs to report a real adapter/device result.
+3. **macOS green**. Currently blocked on `libwebrtc`
    `network_constants.h -Wconstant-conversion` under Xcode 16. Patch in
    flight (explicit `static_cast<uint16_t>` around the wrap-around
    arithmetic).
-5. **Linux + iOS**. Entries exist in `config/platforms.json` as `empty` and
+4. **Linux + iOS**. Entries exist in `config/platforms.json` as `empty` and
    are not wired up.
