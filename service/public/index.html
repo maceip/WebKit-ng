@@ -70,6 +70,13 @@
     .toolbar { margin-bottom: 0.5rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
     .stack { display: grid; gap: 0.5rem; }
     .logbox { white-space: pre-wrap; background: #0b0f14; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; max-height: 22rem; overflow: auto; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+    .tab {
+      background: transparent; color: var(--muted); border: 1px solid transparent;
+      border-bottom: none; border-radius: 6px 6px 0 0; padding: 0.55rem 0.85rem;
+    }
+    .tab.active { color: var(--text); background: var(--panel); border-color: var(--border); }
+    .panel[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -80,7 +87,20 @@
     <a href="/meta">JSON API meta</a>
   </header>
   <main>
-    <section>
+    <nav class="tabs" aria-label="Dashboard tabs">
+      <button type="button" class="tab active" data-tab="builds">Active builds</button>
+      <button type="button" class="tab" data-tab="new-build">New build</button>
+    </nav>
+    <section id="panel-builds" class="panel">
+      <h2>Builds</h2>
+      <div class="toolbar">
+        <button type="button" class="secondary" id="btn-refresh">Refresh now</button>
+        <label class="plat"><input type="checkbox" id="autorefresh" checked /> Auto-refresh list (10s)</label>
+      </div>
+      <div id="builds-wrap" style="overflow-x:auto;"></div>
+      <pre id="log-preview" class="logbox" hidden></pre>
+    </section>
+    <section id="panel-new-build" class="panel" hidden>
       <h2>New build</h2>
       <p class="sub" style="margin:0 0 0.75rem;">Select platforms (from <code>config/platforms.json</code>).</p>
       <div id="platform-checks" class="stack"></div>
@@ -92,17 +112,8 @@
       <textarea id="platform-env-json" placeholder='{"windows":{"NG_WINDOWS_ENABLE_SCCACHE":"1"}}'></textarea>
       <div class="toolbar" style="margin-top:0.75rem;">
         <button type="button" id="btn-start">Start build</button>
-        <label class="plat"><input type="checkbox" id="autorefresh" checked /> Auto-refresh list (10s)</label>
       </div>
       <div id="start-msg" class="msg"></div>
-    </section>
-    <section>
-      <h2>Builds</h2>
-      <div class="toolbar">
-        <button type="button" class="secondary" id="btn-refresh">Refresh now</button>
-      </div>
-      <div id="builds-wrap" style="overflow-x:auto;"></div>
-      <pre id="log-preview" class="logbox" hidden></pre>
     </section>
   </main>
   <footer>API: <code>POST /builds</code> · <code>GET /builds</code> · <code>GET /builds/:id/logs/:platform?tail=200</code></footer>
@@ -123,6 +134,14 @@
     }
 
     let platformsConfig = {};
+
+    function showTab(name) {
+      document.querySelectorAll('[data-tab]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.tab === name);
+      });
+      $('panel-builds').hidden = name !== 'builds';
+      $('panel-new-build').hidden = name !== 'new-build';
+    }
 
     function parseJsonTextarea(id) {
       const raw = $(id).value.trim();
@@ -252,6 +271,9 @@
     });
 
     $('btn-refresh').addEventListener('click', () => refreshBuilds().catch((e) => alert(e.message)));
+    document.querySelectorAll('[data-tab]').forEach((button) => {
+      button.addEventListener('click', () => showTab(button.dataset.tab));
+    });
 
     let timer;
     function armTimer() {

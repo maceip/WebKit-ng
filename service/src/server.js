@@ -54,6 +54,58 @@ function loadState() {
   return JSON.parse(readFileSync(stateFile, 'utf8'));
 }
 
+function parseEnvFile(path) {
+  if (!existsSync(path)) return {};
+  const result = {};
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (match) result[match[1]] = match[2];
+  }
+  return result;
+}
+
+function activeBuildsFromMarkerFiles() {
+  const markers = [
+    { platform: 'windows', path: join(varDir, 'WINDOWS_ACTIVE_BUILD.env'), idKey: 'WINDOWS_BUILD_ID' },
+    { platform: 'macos', path: join(varDir, 'MACOS_ACTIVE_BUILD.env'), idKey: 'MACOS_BUILD_ID' }
+  ];
+
+  return markers.flatMap(({ platform, path, idKey }) => {
+    const env = parseEnvFile(path);
+    const id = env[idKey];
+    if (!id) return [];
+    const request = { env, platformEnv: { [platform]: env }, external: true };
+    return [{
+      id,
+      status: 'running',
+      reason: `external ${platform} build`,
+      createdAt: null,
+      updatedAt: now(),
+      external: true,
+      platforms: [{
+        name: platform,
+        status: 'running',
+        external: true,
+        log: existsSync(join(logDir, `${id}-${platform}.service.log`)) ? join(logDir, `${id}-${platform}.service.log`) : join(logDir, `${id}-${platform}.log`),
+        artifactPrefix: artifactPrefixForPlatform(id, platform, request),
+        workdir: env[`${platform.toUpperCase()}_BUILD_POLL_WORKDIR`],
+        ssmCommandId: env[`${platform.toUpperCase()}_SSM_COMMAND_ID`]
+      }],
+      request
+    }];
+  });
+}
+
+function loadBuilds() {
+  const state = loadState();
+  const builds = [...(state.builds || [])];
+  const known = new Set(builds.map((build) => build.id));
+  for (const build of activeBuildsFromMarkerFiles()) {
+    if (!known.has(build.id)) builds.unshift(build);
+  }
+  return builds;
+}
+
 function saveState(state) {
   mkdirSync(varDir, { recursive: true });
   writeFileSync(stateFile, JSON.stringify(state, null, 2));
@@ -300,7 +352,7 @@ function createBuild(platforms, meta = {}) {
 }
 
 function getBuild(id) {
-  return loadState().builds.find((build) => build.id === id);
+  return loadBuilds().find((build) => build.id === id);
 }
 
 function readJsonFile(path) {
@@ -378,7 +430,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && parts[0] === 'builds' && parts.length === 1) {
-      return json(res, 200, loadState().builds);
+      return json(res, 200, loadBuilds());
     }
 
     if (req.method === 'GET' && parts[0] === 'changes' && parts.length === 1) {
@@ -432,7 +484,9 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === 'GET' && parts[2] === 'logs' && parts[3]) {
         const platform = parts[3];
-        const logPath = join(logDir, `${build.id}-${platform}.service.log`);
+        const serviceLogPath = join(logDir, `${build.id}-${platform}.service.log`);
+        const directLogPath = join(logDir, `${build.id}-${platform}.log`);
+        const logPath = existsSync(serviceLogPath) ? serviceLogPath : directLogPath;
         if (!existsSync(logPath)) return json(res, 404, { error: 'log not found' });
         if (url.searchParams.has('tail')) {
           res.writeHead(200, { 'content-type': 'text/plain' });
