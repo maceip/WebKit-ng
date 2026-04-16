@@ -1,0 +1,112 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
+index 960081bf779..f0e2fb703db 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
+@@ -38,9 +38,14 @@ namespace WebCore::WebGPU {
+ 
+ static String adapterName(WGPUAdapter adapter)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(adapter);
++    return String::fromLatin1("Dawn");
++#else
+     WGPUAdapterProperties properties;
+     wgpuAdapterGetProperties(adapter, &properties);
+     return String::fromLatin1(properties.name);
++#endif
+ }
+ 
+ static Ref<SupportedFeatures> supportedFeatures(const Vector<WGPUFeatureName>& features)
+@@ -63,6 +68,48 @@ static Ref<SupportedFeatures> supportedFeatures(WGPUAdapter adapter)
+ 
+ static Ref<SupportedLimits> supportedLimits(WGPUAdapter adapter)
+ {
++#if PLATFORM(WIN)
++    WGPULimits limits { };
++    auto result = wgpuAdapterGetLimits(adapter, &limits);
++    ASSERT_UNUSED(result, result);
++    return SupportedLimits::create(
++        limits.maxTextureDimension1D,
++        limits.maxTextureDimension2D,
++        limits.maxTextureDimension3D,
++        limits.maxTextureArrayLayers,
++        limits.maxBindGroups,
++        limits.maxBindGroupsPlusVertexBuffers,
++        limits.maxBindingsPerBindGroup,
++        limits.maxDynamicUniformBuffersPerPipelineLayout,
++        limits.maxDynamicStorageBuffersPerPipelineLayout,
++        limits.maxSampledTexturesPerShaderStage,
++        limits.maxSamplersPerShaderStage,
++        limits.maxStorageBuffersPerShaderStage,
++        limits.maxStorageTexturesPerShaderStage,
++        limits.maxUniformBuffersPerShaderStage,
++        limits.maxUniformBufferBindingSize,
++        limits.maxStorageBufferBindingSize,
++        limits.minUniformBufferOffsetAlignment,
++        limits.minStorageBufferOffsetAlignment,
++        limits.maxVertexBuffers,
++        limits.maxBufferSize,
++        limits.maxVertexAttributes,
++        limits.maxVertexBufferArrayStride,
++        limits.maxInterStageShaderComponents,
++        limits.maxInterStageShaderVariables,
++        limits.maxColorAttachments,
++        limits.maxColorAttachmentBytesPerSample,
++        limits.maxComputeWorkgroupStorageSize,
++        limits.maxComputeInvocationsPerWorkgroup,
++        limits.maxComputeWorkgroupSizeX,
++        limits.maxComputeWorkgroupSizeY,
++        limits.maxComputeWorkgroupSizeZ,
++        limits.maxComputeWorkgroupsPerDimension,
++        limits.maxStorageBuffersInFragmentStage,
++        limits.maxStorageTexturesInFragmentStage,
++        limits.maxStorageBuffersInVertexStage,
++        limits.maxStorageTexturesInVertexStage);
++#else
+     WGPUSupportedLimits limits;
+     auto result = wgpuAdapterGetLimits(adapter, &limits);
+     ASSERT_UNUSED(result, result);
+@@ -103,13 +150,19 @@ static Ref<SupportedLimits> supportedLimits(WGPUAdapter adapter)
+         limits.limits.maxStorageTexturesInFragmentStage,
+         limits.limits.maxStorageBuffersInVertexStage,
+         limits.limits.maxStorageTexturesInVertexStage);
++#endif
+ }
+ 
+ static bool isFallbackAdapter(WGPUAdapter adapter)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(adapter);
++    return false;
++#else
+     WGPUAdapterProperties properties;
+     wgpuAdapterGetProperties(adapter, &properties);
+     return properties.adapterType == WGPUAdapterType_CPU;
++#endif
+ }
+ 
+ WTF_MAKE_TZONE_ALLOCATED_IMPL(AdapterImpl);
+@@ -168,6 +221,15 @@ static void requestDeviceCallback(WGPURequestDeviceStatus status, WGPUDevice dev
+ 
+ void AdapterImpl::requestDevice(const DeviceDescriptor& descriptor, CompletionHandler<void(RefPtr<Device>&&)>&& callback)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(descriptor);
++    auto device = wgpuAdapterCreateDevice(m_backing.get(), nullptr);
++    if (!device) {
++        callback(nullptr);
++        return;
++    }
++    callback(DeviceImpl::create(adoptWebGPU(device), supportedFeatures(m_backing.get()), supportedLimits(m_backing.get()), m_convertToBackingContext));
++#else
+     auto label = descriptor.label.utf8();
+ 
+     auto features = descriptor.requiredFeatures.map([&convertToBackingContext = m_convertToBackingContext.get()](auto featureName) {
+@@ -303,6 +365,7 @@ void AdapterImpl::requestDevice(const DeviceDescriptor& descriptor, CompletionHa
+         callback(DeviceImpl::create(adoptWebGPU(device), status == WGPURequestDeviceStatus_Success ? WTF::move(requestedFeatures) : SupportedFeatures::create({ }), WTF::move(requestedLimits), convertToBackingContext));
+     });
+     wgpuAdapterRequestDevice(m_backing.get(), &backingDescriptor, &requestDeviceCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in requestDeviceCallback().
++#endif
+ }
+ 
+ bool AdapterImpl::xrCompatible()
