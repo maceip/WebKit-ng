@@ -5,6 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const serviceDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const dashboardPath = join(serviceDir, 'public', 'index.html');
 const varDir = join(root, 'var');
 const logDir = join(varDir, 'logs');
 const stateFile = join(varDir, 'state.json');
@@ -12,6 +14,25 @@ const port = Number(process.env.PORT || 8787);
 const running = new Map();
 
 mkdirSync(logDir, { recursive: true });
+
+function loadDashboardHtml() {
+  if (!existsSync(dashboardPath)) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>ng-webkit</title></head><body>
+<p>Dashboard missing. Add <code>service/public/index.html</code> (see repo).</p>
+<p><a href="/meta">API meta</a></p></body></html>`;
+  }
+  return readFileSync(dashboardPath, 'utf8');
+}
+
+const dashboardHtml = loadDashboardHtml();
+
+function html(res, status, body) {
+  res.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store'
+  });
+  res.end(body);
+}
 
 class HttpError extends Error {
   constructor(statusCode, message) {
@@ -48,7 +69,11 @@ function updateBuild(id, patch) {
 }
 
 function json(res, status, payload) {
-  res.writeHead(status, { 'content-type': 'application/json' });
+  res.writeHead(status, {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    'access-control-allow-origin': '*'
+  });
   res.end(JSON.stringify(payload, null, 2));
 }
 
@@ -56,7 +81,11 @@ async function body(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    badRequest('request body must be valid JSON');
+  }
 }
 
 function normalizeStringRecord(value, label) {
@@ -188,6 +217,7 @@ function buildEnvForPlatform(build, platform) {
 
 function startPlatformBuild(build, platform) {
   const logPath = join(logDir, `${build.id}-${platform}.service.log`);
+  writeFileSync(logPath, `[${now()}] starting ${platform} build ${build.id}\n`, { flag: 'a' });
   const child = spawn(join(root, 'scripts', 'run-build.sh'), [platform, build.id], {
     cwd: root,
     env: buildEnvForPlatform(build, platform),
@@ -207,6 +237,24 @@ function startPlatformBuild(build, platform) {
     storedPlatform.startedAt = now();
     saveState(started);
   }
+
+  child.on('error', (error) => {
+    running.delete(`${build.id}:${platform}`);
+    logStream.end(`[${now()}] spawn failed: ${error.message}\n`);
+    const current = loadState();
+    const stored = current.builds.find((item) => item.id === build.id);
+    const target = stored?.platforms.find((item) => item.name === platform);
+    if (target) {
+      target.status = 'failed';
+      target.error = error.message;
+      target.finishedAt = now();
+    }
+    if (stored) {
+      stored.status = stored.platforms.some((item) => item.status === 'running') ? 'running' : 'failed';
+      stored.updatedAt = now();
+      saveState(current);
+    }
+  });
 
   child.on('exit', (code, signal) => {
     running.delete(`${build.id}:${platform}`);
@@ -282,10 +330,46 @@ const server = http.createServer(async (req, res) => {
     const url = requestUrl(req.url);
     const parts = url.pathname.split('/').filter(Boolean);
 
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET,POST,OPTIONS',
+        'access-control-allow-headers': 'content-type'
+      });
+      return res.end();
+    }
+
     if (req.method === 'GET' && parts.length === 0) {
+      return html(res, 200, dashboardHtml);
+    }
+
+    if (req.method === 'GET' && parts[0] === 'meta' && parts.length === 1) {
       return json(res, 200, {
         name: 'ng-webkit build service',
-        endpoints: ['GET /platforms', 'GET /builds', 'POST /builds', 'GET /builds/:id', 'GET /builds/:id/artifacts', 'GET /builds/:id/logs/:platform?tail=200', 'POST /builds/:id/restart', 'POST /builds/:id/checkpoint', 'POST /builds/:id/cancel']
+        dashboard: 'GET /',
+        endpoints: [
+          'GET /health',
+          'GET /platforms',
+          'GET /builds',
+          'POST /builds',
+          'POST /builds?dryRun=1',
+          'GET /builds/:id',
+          'GET /builds/:id/artifacts',
+          'GET /builds/:id/logs/:platform?tail=200',
+          'POST /builds/:id/restart',
+          'POST /builds/:id/checkpoint',
+          'POST /builds/:id/cancel'
+        ]
+      });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'health' && parts.length === 1) {
+      return json(res, 200, {
+        ok: true,
+        time: now(),
+        root,
+        port,
+        running: [...running.keys()]
       });
     }
 
@@ -316,7 +400,17 @@ const server = http.createServer(async (req, res) => {
       const payload = await body(req);
       const platforms = normalizePlatforms(payload.platforms);
       validateBuildEnvPayload(payload);
-      return json(res, 202, createBuild(platforms, expandBuildRequest(payload, platforms)));
+      const request = expandBuildRequest(payload, platforms);
+      if (url.searchParams.get('dryRun') === '1' || url.searchParams.get('dryRun') === 'true') {
+        return json(res, 200, {
+          ok: true,
+          dryRun: true,
+          platforms,
+          request,
+          artifactPrefixes: Object.fromEntries(platforms.map((platform) => [platform, artifactPrefixForPlatform('dry-run', platform, request)]))
+        });
+      }
+      return json(res, 202, createBuild(platforms, request));
     }
 
     if (parts[0] === 'builds' && parts[1]) {
@@ -381,5 +475,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`ng-webkit build service listening on http://127.0.0.1:${port}`);
+  console.log(`ng-webkit build service listening on http://127.0.0.1:${port}/ (dashboard + API)`);
 });

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ng-webkit — builds</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --ok: #3fb950;
+      --bad: #f85149;
+      --warn: #d29922;
+      --border: #30363d;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      line-height: 1.45; font-size: 14px;
+    }
+    header {
+      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem;
+    }
+    header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    header .sub { color: var(--muted); font-size: 0.85rem; }
+    header a { color: var(--accent); }
+    main { padding: 1rem 1.25rem; max-width: 1200px; margin: 0 auto; }
+    section {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1rem; margin-bottom: 1rem;
+    }
+    section h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 600; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
+    label.plat {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      cursor: pointer; user-select: none;
+    }
+    input[type="text"], textarea {
+      width: 100%; max-width: 36rem; padding: 0.4rem 0.5rem;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); font: inherit;
+    }
+    textarea { min-height: 4rem; font-family: ui-monospace, monospace; font-size: 12px; }
+    button {
+      cursor: pointer; background: var(--accent); color: #fff; border: none;
+      padding: 0.45rem 0.9rem; border-radius: 6px; font: inherit; font-weight: 500;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    button.danger { background: var(--bad); }
+    .msg { margin-top: 0.5rem; font-size: 0.85rem; }
+    .msg.err { color: var(--bad); }
+    .msg.ok { color: var(--ok); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    .st-running { color: var(--warn); }
+    .st-succeeded { color: var(--ok); }
+    .st-failed, .st-cancelled { color: var(--bad); }
+    .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .actions a { color: var(--accent); font-size: 12px; }
+    footer { padding: 1rem; color: var(--muted); font-size: 12px; text-align: center; }
+    .toolbar { margin-bottom: 0.5rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .stack { display: grid; gap: 0.5rem; }
+    .logbox { white-space: pre-wrap; background: #0b0f14; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; max-height: 22rem; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ng-webkit</h1>
+    <span class="sub">WebKit-ng build orchestrator</span>
+    <span class="sub">·</span>
+    <a href="/meta">JSON API meta</a>
+  </header>
+  <main>
+    <section>
+      <h2>New build</h2>
+      <p class="sub" style="margin:0 0 0.75rem;">Select platforms (from <code>config/platforms.json</code>).</p>
+      <div id="platform-checks" class="stack"></div>
+      <p style="margin: 0.75rem 0 0.25rem; color: var(--muted); font-size: 12px;">Reason (optional)</p>
+      <input type="text" id="reason" placeholder="e.g. test dawn-api-compat" />
+      <p style="margin: 0.75rem 0 0.25rem; color: var(--muted); font-size: 12px;">Global env JSON (optional)</p>
+      <textarea id="env-json" placeholder='{"NG_ALERT_WEBHOOK_URL":"..."}'></textarea>
+      <p style="margin: 0.75rem 0 0.25rem; color: var(--muted); font-size: 12px;">Platform env JSON (optional)</p>
+      <textarea id="platform-env-json" placeholder='{"windows":{"NG_WINDOWS_ENABLE_SCCACHE":"1"}}'></textarea>
+      <div class="toolbar" style="margin-top:0.75rem;">
+        <button type="button" id="btn-start">Start build</button>
+        <label class="plat"><input type="checkbox" id="autorefresh" checked /> Auto-refresh list (10s)</label>
+      </div>
+      <div id="start-msg" class="msg"></div>
+    </section>
+    <section>
+      <h2>Builds</h2>
+      <div class="toolbar">
+        <button type="button" class="secondary" id="btn-refresh">Refresh now</button>
+      </div>
+      <div id="builds-wrap" style="overflow-x:auto;"></div>
+      <pre id="log-preview" class="logbox" hidden></pre>
+    </section>
+  </main>
+  <footer>API: <code>POST /builds</code> · <code>GET /builds</code> · <code>GET /builds/:id/logs/:platform?tail=200</code></footer>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function api(path, opts = {}) {
+      const r = await fetch(path, {
+        headers: { 'content-type': 'application/json', ...opts.headers },
+        ...opts,
+      });
+      const text = await r.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+      if (!r.ok) throw new Error(data?.error || data?.message || text || r.status);
+      return data;
+    }
+
+    let platformsConfig = {};
+
+    function parseJsonTextarea(id) {
+      const raw = $(id).value.trim();
+      if (!raw) return {};
+      return JSON.parse(raw);
+    }
+
+    async function loadPlatforms() {
+      const data = await api('/platforms');
+      platformsConfig = data.platforms || {};
+      const el = $('platform-checks');
+      el.innerHTML = '';
+      for (const [name, cfg] of Object.entries(platformsConfig)) {
+        if (cfg.status === 'empty') continue;
+        const lab = document.createElement('label');
+        lab.className = 'plat';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = name;
+        cb.dataset.platform = name;
+        if (['android', 'windows', 'macos'].includes(name)) cb.checked = true;
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(name + ' (' + (cfg.status || '?') + ')'));
+        const line = document.createElement('div');
+        line.className = 'row';
+        line.appendChild(lab);
+        const presets = cfg.presets || {};
+        if (Object.keys(presets).length) {
+          const sel = document.createElement('select');
+          sel.dataset.presetFor = name;
+          sel.innerHTML = '<option value="">default</option>' + Object.entries(presets).map(([key, p]) => '<option value="' + esc(key) + '">' + esc(key) + ' — ' + esc(p.description || '') + '</option>').join('');
+          line.appendChild(sel);
+        }
+        el.appendChild(line);
+      }
+    }
+
+    function statusClass(s) {
+      if (s === 'running') return 'st-running';
+      if (s === 'succeeded') return 'st-succeeded';
+      if (s === 'failed' || s === 'cancelled') return 'st-failed';
+      return '';
+    }
+
+    function renderBuilds(builds) {
+      const w = $('builds-wrap');
+      if (!builds.length) {
+        w.innerHTML = '<p class="sub">No builds yet.</p>';
+        return;
+      }
+      const rows = builds.map((b) => {
+        const plats = (b.platforms || []).map((p) => {
+          const logUrl = '/builds/' + encodeURIComponent(b.id) + '/logs/' + encodeURIComponent(p.name) + '?tail=200';
+          return '<div><span class="' + statusClass(p.status) + '">' + esc(p.name) + ': ' + esc(p.status) + '</span> · <a href="' + logUrl + '" target="_blank" rel="noopener">log</a> · <button type="button" class="secondary" data-log="' + esc(b.id) + '" data-platform="' + esc(p.name) + '">Preview</button></div>';
+        }).join('');
+        return '<tr><td class="mono">' + esc(b.id) + '</td><td class="' + statusClass(b.status) + '">' + esc(b.status) + '</td><td>' + esc(b.createdAt || '') + '</td><td>' + esc(b.reason || '—') + '</td><td>' + plats + '</td><td class="actions">' +
+          '<a href="/builds/' + encodeURIComponent(b.id) + '" target="_blank">JSON</a> ' +
+          '<button type="button" class="secondary" data-restart="' + esc(b.id) + '">Restart</button>' +
+          '<button type="button" class="secondary" data-cancel="' + b.id + '">Cancel</button>' +
+          '</td></tr>';
+      }).join('');
+      w.innerHTML = '<table><thead><tr><th>Build id</th><th>Status</th><th>Created</th><th>Reason</th><th>Platforms</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      w.querySelectorAll('[data-cancel]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Cancel build ' + btn.dataset.cancel + '?')) return;
+          try {
+            await api('/builds/' + encodeURIComponent(btn.dataset.cancel) + '/cancel', { method: 'POST', body: '{}' });
+            await refreshBuilds();
+          } catch (e) {
+            alert(e.message);
+          }
+        });
+      });
+      w.querySelectorAll('[data-restart]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          await api('/builds/' + encodeURIComponent(btn.dataset.restart) + '/restart', { method: 'POST', body: '{}' });
+          await refreshBuilds();
+        });
+      });
+      w.querySelectorAll('[data-log]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const text = await fetch('/builds/' + encodeURIComponent(btn.dataset.log) + '/logs/' + encodeURIComponent(btn.dataset.platform) + '?tail=250').then((r) => r.text());
+          const box = $('log-preview');
+          box.hidden = false;
+          box.textContent = text;
+        });
+      });
+    }
+
+    async function refreshBuilds() {
+      const builds = await api('/builds');
+      renderBuilds(builds);
+    }
+
+    $('btn-start').addEventListener('click', async () => {
+      const msg = $('start-msg');
+      msg.textContent = '';
+      msg.className = 'msg';
+      const boxes = document.querySelectorAll('#platform-checks input[type=checkbox]:checked');
+      const platforms = [...boxes].map((c) => c.value);
+      if (!platforms.length) {
+        msg.textContent = 'Select at least one platform.';
+        msg.className = 'msg err';
+        return;
+      }
+      const reason = $('reason').value.trim();
+      try {
+        const presets = {};
+        document.querySelectorAll('[data-preset-for]').forEach((sel) => {
+          if (sel.value && platforms.includes(sel.dataset.presetFor)) presets[sel.dataset.presetFor] = sel.value;
+        });
+        const body = {
+          platforms,
+          ...(reason ? { reason } : {}),
+          ...(Object.keys(presets).length ? { presets } : {}),
+          env: parseJsonTextarea('env-json'),
+          platformEnv: parseJsonTextarea('platform-env-json')
+        };
+        const created = await api('/builds', { method: 'POST', body: JSON.stringify(body) });
+        msg.textContent = 'Started: ' + created.id;
+        msg.className = 'msg ok';
+        await refreshBuilds();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = 'msg err';
+      }
+    });
+
+    $('btn-refresh').addEventListener('click', () => refreshBuilds().catch((e) => alert(e.message)));
+
+    let timer;
+    function armTimer() {
+      clearInterval(timer);
+      if ($('autorefresh').checked) timer = setInterval(() => refreshBuilds().catch(() => {}), 10000);
+    }
+    $('autorefresh').addEventListener('change', armTimer);
+
+    (async () => {
+      try {
+        await loadPlatforms();
+        await refreshBuilds();
+        armTimer();
+      } catch (e) {
+        $('builds-wrap').innerHTML = '<p class="msg err">' + e.message + '</p>';
+      }
+    })();
+  </script>
+</body>
+</html>
