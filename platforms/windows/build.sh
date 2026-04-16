@@ -22,6 +22,9 @@ NINJA_BIN="${NG_WINDOWS_NINJA:-C:/BuildTools/Common7/IDE/CommonExtensions/Micros
 PERL_BIN="${NG_WINDOWS_PERL:-C:/Strawberry/perl/bin}"
 VS_DEV_CMD="${NG_WINDOWS_VSDEVCMD:-C:/BuildTools/Common7/Tools/VsDevCmd.bat}"
 VCPKG_ROOT="${NG_WINDOWS_VCPKG_ROOT:-C:/vcpkg}"
+ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-0}"
+SCCACHE_EXE="${NG_WINDOWS_SCCACHE_EXE:-$TOOLBIN/sccache.exe}"
+SCCACHE_DIR="${NG_WINDOWS_SCCACHE_DIR:-C:/Bootstrap/sccache}"
 
 WEBKIT_URL="${NG_WINDOWS_WEBKIT_URL:-https://github.com/WebKit/WebKit.git}"
 WEBKIT_COMMIT="${NG_WINDOWS_WEBKIT_COMMIT:-52dbebe20b922cab89928085f9dcfa8082a813e4}"
@@ -49,6 +52,9 @@ fi
 # Baseline Win port (finish compile first). Set NG_WINDOWS_ENABLE_WEBGPU=1 for WebGPU/Dawn CMake flags.
 # Override fully with NG_WINDOWS_BUILD_INNER if needed.
 _WIN_BASE='perl Tools\Scripts\build-webkit --release --win -DCMAKE_C_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_C_FLAGS=-D_CRT_SECURE_NO_WARNINGS -DCMAKE_CXX_FLAGS=-D_CRT_SECURE_NO_WARNINGS'
+if [[ "$ENABLE_SCCACHE" == "1" ]]; then
+  _WIN_BASE+=" -DCMAKE_C_COMPILER_LAUNCHER=$SCCACHE_EXE -DCMAKE_CXX_COMPILER_LAUNCHER=$SCCACHE_EXE"
+fi
 if [[ "${NG_WINDOWS_ENABLE_WEBGPU:-0}" == "1" ]]; then
   BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE} --webgpu -DENABLE_EXPERIMENTAL_FEATURES=ON}"
 else
@@ -122,6 +128,10 @@ export NG_PATH_PREPEND="$PATH_PREPEND"
 export NG_VCPKG_ROOT="$VCPKG_ROOT"
 export NG_BUILD_INNER="$BUILD_INNER"
 export NG_USE_CLEAN="$USE_CLEAN"
+export NG_ENABLE_SCCACHE="$ENABLE_SCCACHE"
+export NG_SCCACHE_EXE="$SCCACHE_EXE"
+export NG_SCCACHE_DIR="$SCCACHE_DIR"
+export NG_TOOLBIN="$TOOLBIN"
 export NG_BOOTSTRAP="$BOOTSTRAP"
 # Default cone sparse roots (BUILD_LAW.md): overrides WebKit's bundled .git/config.worktree
 # sparse pattern (otherwise only repo-root files appear). Export NG_WINDOWS_SPARSE_PATHS to override;
@@ -134,6 +144,7 @@ python3 <<'PY'
 import json, os
 out = os.environ["NG_STAGE_CONFIG_OUT"]
 use_clean = os.environ.get("NG_USE_CLEAN", "1").strip() not in ("0", "false", "False", "")
+enable_sccache = os.environ.get("NG_ENABLE_SCCACHE", "0").strip() in ("1", "true", "True", "yes", "on")
 sparse_raw = os.environ.get("NG_WINDOWS_SPARSE_PATHS", "").strip()
 sparse = sparse_raw.split() if sparse_raw else []
 cfg = {
@@ -150,6 +161,10 @@ cfg = {
     "vcpkgRoot": os.environ["NG_VCPKG_ROOT"],
     "buildCommandLine": os.environ["NG_BUILD_INNER"],
     "bootstrap": os.environ["NG_BOOTSTRAP"],
+    "enableSccache": enable_sccache,
+    "sccacheExe": os.environ["NG_SCCACHE_EXE"],
+    "sccacheDir": os.environ["NG_SCCACHE_DIR"],
+    "toolbin": os.environ["NG_TOOLBIN"],
 }
 if sparse:
     cfg["sparseCheckoutPaths"] = sparse

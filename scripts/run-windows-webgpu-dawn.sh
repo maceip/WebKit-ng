@@ -8,6 +8,7 @@ ID="${1:-}"
 
 export NG_WINDOWS_SOURCE_PRESET="${NG_WINDOWS_SOURCE_PRESET:-iangrunert-win-gigacage-skia-fixes}"
 export NG_WINDOWS_ENABLE_WEBGPU="${NG_WINDOWS_ENABLE_WEBGPU:-1}"
+export NG_WINDOWS_ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-1}"
 
 if [[ -n "$ID" ]]; then
   exec "$ROOT/scripts/run-build.sh" windows "$ID"

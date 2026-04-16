@@ -57,6 +57,57 @@ New-Item -ItemType Directory -Force -Path $config.workdir | Out-Null
 $artDir = Join-Path $config.workdir "artifacts"
 New-Item -ItemType Directory -Force -Path $artDir | Out-Null
 
+function Ensure-Sccache {
+  if ($null -eq $config.PSObject.Properties["enableSccache"] -or -not [bool]$config.enableSccache) {
+    return
+  }
+
+  $toolbin = "C:\Bootstrap\toolbin"
+  if ($null -ne $config.PSObject.Properties["toolbin"] -and $config.toolbin) {
+    $toolbin = $config.toolbin
+  }
+  New-Item -ItemType Directory -Force -Path $toolbin | Out-Null
+
+  $sccacheExe = Join-Path $toolbin "sccache.exe"
+  if ($null -ne $config.PSObject.Properties["sccacheExe"] -and $config.sccacheExe) {
+    $sccacheExe = $config.sccacheExe
+  }
+
+  if (-not (Test-Path $sccacheExe)) {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/mozilla/sccache/releases/latest" -Headers @{ "User-Agent" = "ng-webkit-build" }
+    $asset = $release.assets | Where-Object { $_.name -match "x86_64-pc-windows-msvc.*\.zip$" } | Select-Object -First 1
+    if (-not $asset) {
+      throw "Could not find a Windows sccache asset in the latest mozilla/sccache release."
+    }
+
+    $zipPath = Join-Path $config.workdir "sccache.zip"
+    $extractPath = Join-Path $config.workdir "sccache"
+    if (Test-Path $extractPath) {
+      Remove-Item -Recurse -Force $extractPath
+    }
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+    $downloadedExe = Get-ChildItem -Path $extractPath -Recurse -Filter "sccache.exe" | Select-Object -First 1
+    if (-not $downloadedExe) {
+      throw "Downloaded sccache archive did not contain sccache.exe."
+    }
+    Copy-Item $downloadedExe.FullName $sccacheExe -Force
+  }
+
+  $cacheDir = "C:\Bootstrap\sccache"
+  if ($null -ne $config.PSObject.Properties["sccacheDir"] -and $config.sccacheDir) {
+    $cacheDir = $config.sccacheDir
+  }
+  New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+  $env:SCCACHE_DIR = $cacheDir
+  $env:SCCACHE_CACHE_SIZE = "50G"
+  $env:SCCACHE_IDLE_TIMEOUT = "0"
+  & $sccacheExe --start-server | Write-Host
+  Write-Host "sccache enabled: $sccacheExe cache=$cacheDir"
+}
+
+Ensure-Sccache
+
 function Write-NinjaProgressFromLog {
   param([string]$LogPath, [string]$ProgressPath)
   if (-not (Test-Path $LogPath)) { return }
@@ -114,8 +165,19 @@ function Invoke-BuildCmd {
   [void]$lines.Add("call `"$VsDevCmd`" -arch=x64 -host_arch=x64")
   [void]$lines.Add("set `"PATH=$pp%PATH%`"")
   [void]$lines.Add("set `"VCPKG_ROOT=$vcpkgRoot`"")
+  if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.enableSccache) {
+    [void]$lines.Add("set `"SCCACHE_DIR=$($config.sccacheDir)`"")
+    [void]$lines.Add("set `"SCCACHE_CACHE_SIZE=50G`"")
+    [void]$lines.Add("set `"SCCACHE_IDLE_TIMEOUT=0`"")
+    [void]$lines.Add("`"$($config.sccacheExe)`" --zero-stats >> `"$logFile`" 2>&1")
+  }
   [void]$lines.Add("cd /d `"$WorkingDir`"")
   [void]$lines.Add("$CmdLine >> `"$logFile`" 2>&1")
+  if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.enableSccache) {
+    [void]$lines.Add("set `"NG_BUILD_EXIT=%ERRORLEVEL%`"")
+    [void]$lines.Add("`"$($config.sccacheExe)`" --show-stats >> `"$logFile`" 2>&1")
+    [void]$lines.Add("exit /b %NG_BUILD_EXIT%")
+  }
   [System.IO.File]::WriteAllLines($batchPath, $lines)
   $pollSec = 15
   $progressJob = Start-Job -ScriptBlock {
