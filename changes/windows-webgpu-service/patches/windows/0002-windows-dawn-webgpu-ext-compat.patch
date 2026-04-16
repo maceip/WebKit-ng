@@ -1,0 +1,152 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
+new file mode 100644
+index 00000000000..64c4423dafd
+--- /dev/null
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
+@@ -0,0 +1,146 @@
++/*
++ * Copyright (C) 2026 Apple Inc. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
++ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
++ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
++ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
++ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
++ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
++ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
++ * THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#pragma once
++
++#include <WebGPU/WebGPU.h>
++#include <span>
++#include <wtf/Vector.h>
++
++typedef struct WGPUExternalTextureImpl* WGPUExternalTexture;
++typedef struct WGPUXRBindingImpl* WGPUXRBinding;
++typedef struct WGPUXRProjectionLayerImpl* WGPUXRProjectionLayer;
++typedef struct WGPUXRSubImageImpl* WGPUXRSubImage;
++typedef struct WGPUXRViewImpl* WGPUXRView;
++typedef struct WGPUSwapChainImpl* WGPUSwapChain;
++typedef void* CVPixelBufferRef;
++
++typedef struct WGPUSwapChainDescriptor {
++    WGPUChainedStruct const* nextInChain;
++    char const* label;
++    WGPUTextureUsageFlags usage;
++    WGPUTextureFormat format;
++    uint32_t width;
++    uint32_t height;
++    WGPUPresentMode presentMode;
++} WGPUSwapChainDescriptor;
++
++typedef enum WGPUColorSpace {
++    WGPUColorSpace_SRGB = 0x00000001,
++    WGPUColorSpace_Force32 = 0x7FFFFFFF
++} WGPUColorSpace;
++
++typedef enum WGPUBufferBindingTypeExtended {
++    WGPUBufferBindingType_Float3x2 = WGPUBufferBindingType_Force32 - 1,
++    WGPUBufferBindingType_Float4x3 = WGPUBufferBindingType_Force32 - 2,
++    WGPUBufferBindingType_ArrayLength = WGPUBufferBindingType_Force32 - 3,
++} WGPUBufferBindingTypeExtended;
++
++typedef enum WGPUSTypeExtended {
++    WGPUSTypeExtended_InstanceCocoaDescriptor = 0x151BBC00,
++    WGPUSTypeExtended_SurfaceDescriptorCocoaSurfaceBacking = 0x017E9710,
++    WGPUSTypeExtended_BindGroupEntryExternalTexture = 0xF7A6EBF9,
++    WGPUSTypeExtended_BindGroupLayoutEntryExternalTexture = 0x645C3DAA,
++    WGPUSTypeExtended_Force32 = 0x7FFFFFFF
++} WGPUSTypeExtended;
++
++static constexpr auto WGPUTextureSampleType_ExternalTexture = static_cast<WGPUTextureSampleType>(WGPUTextureSampleType_Force32 - 1);
++
++typedef struct WGPUExternalTextureBindingLayout {
++} WGPUExternalTextureBindingLayout;
++
++typedef struct WGPUExternalTextureDescriptor {
++    char const* label;
++    CVPixelBufferRef pixelBuffer;
++    WGPUColorSpace colorSpace;
++} WGPUExternalTextureDescriptor;
++
++static inline void wgpuExternalTextureReference(WGPUExternalTexture) { }
++static inline void wgpuExternalTextureRelease(WGPUExternalTexture) { }
++static inline void wgpuXRBindingReference(WGPUXRBinding) { }
++static inline void wgpuXRBindingRelease(WGPUXRBinding) { }
++static inline void wgpuXRProjectionLayerReference(WGPUXRProjectionLayer) { }
++static inline void wgpuXRProjectionLayerRelease(WGPUXRProjectionLayer) { }
++static inline void wgpuXRSubImageReference(WGPUXRSubImage) { }
++static inline void wgpuXRSubImageRelease(WGPUXRSubImage) { }
++static inline void wgpuXRViewReference(WGPUXRView) { }
++static inline void wgpuXRViewRelease(WGPUXRView) { }
++static inline void wgpuSwapChainReference(WGPUSwapChain) { }
++static inline void wgpuSwapChainRelease(WGPUSwapChain) { }
++
++static inline WGPUTexture wgpuSwapChainGetCurrentTexture(WGPUSwapChain, uint32_t) { return nullptr; }
++static inline void wgpuSwapChainPresent(WGPUSwapChain) { }
++static inline WGPUSwapChain wgpuDeviceCreateSwapChain(WGPUDevice, WGPUSurface, const WGPUSwapChainDescriptor*) { return nullptr; }
++static inline WGPUExternalTexture wgpuDeviceImportExternalTexture(WGPUDevice, const WGPUExternalTextureDescriptor*) { return nullptr; }
++static inline void wgpuExternalTextureDestroy(WGPUExternalTexture) { }
++static inline void wgpuExternalTextureUndestroy(WGPUExternalTexture) { }
++static inline void wgpuExternalTextureUpdate(WGPUExternalTexture, CVPixelBufferRef) { }
++static inline WGPUBool wgpuBindGroupUpdateExternalTextures(WGPUBindGroup, WGPUExternalTexture) { return false; }
++static inline WGPUBool wgpuExternalTextureIsValid(WGPUExternalTexture) { return false; }
++
++static inline WGPUXRBinding wgpuDeviceCreateXRBinding(WGPUDevice) { return nullptr; }
++static inline WGPUXRProjectionLayer wgpuBindingCreateXRProjectionLayer(WGPUXRBinding, WGPUTextureFormat, WGPUTextureFormat*, WGPUTextureUsageFlags, double) { return nullptr; }
++static inline WGPUXRSubImage wgpuBindingGetViewSubImage(WGPUXRBinding, WGPUXRProjectionLayer) { return nullptr; }
++static inline WGPUTexture wgpuXRSubImageGetColorTexture(WGPUXRSubImage) { return nullptr; }
++static inline WGPUTexture wgpuXRSubImageGetDepthStencilTexture(WGPUXRSubImage) { return nullptr; }
++static inline WGPUBool wgpuAdapterXRCompatible(WGPUAdapter) { return false; }
++static inline WGPUBool wgpuXRBindingIsValid(WGPUXRBinding) { return false; }
++static inline WGPUBool wgpuXRProjectionLayerIsValid(WGPUXRProjectionLayer) { return false; }
++static inline WGPUBool wgpuXRSubImageIsValid(WGPUXRSubImage) { return false; }
++static inline WGPUBool wgpuXRViewIsValid(WGPUXRView) { return false; }
++
++static inline void wgpuDevicePauseErrorReporting(WGPUDevice, WGPUBool) { }
++static inline void wgpuDeviceClearDeviceLostCallback(WGPUDevice) { }
++static inline void wgpuDeviceClearUncapturedErrorCallback(WGPUDevice) { }
++
++static inline WGPULimits wgpuDefaultLimits()
++{
++    return { };
++}
++
++static inline uint64_t wgpuBufferGetInitialSize(WGPUBuffer)
++{
++    return 0;
++}
++
++static inline std::span<uint8_t> wgpuBufferGetBufferContents(WGPUBuffer)
++{
++    return { };
++}
++
++template<typename Callback>
++static inline void wgpuDeviceSetDeviceLostCallbackWithBlock(WGPUDevice, Callback) { }
++
++template<typename Offsets>
++static inline void wgpuRenderBundleEncoderSetBindGroupWithDynamicOffsets(WGPURenderBundleEncoder encoder, uint32_t groupIndex, WGPUBindGroup group, Offsets&& offsets)
++{
++    Vector<uint32_t> copiedOffsets;
++    if (offsets) {
++        copiedOffsets.reserveInitialCapacity(offsets->size());
++        for (auto offset : *offsets)
++            copiedOffsets.append(offset);
++    }
++    wgpuRenderBundleEncoderSetBindGroup(encoder, groupIndex, group, copiedOffsets.size(), copiedOffsets.span().data());
++}
