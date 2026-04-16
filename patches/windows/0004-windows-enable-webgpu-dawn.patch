@@ -39,12 +39,13 @@ index 7ea8e8c62e7..e0c8407e556 100644
 
  # No support planned
  WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_FTPDIR PRIVATE OFF)
-@@ -183,6 +184,10 @@ if (USE_WOFF2)
+@@ -182,6 +183,11 @@ if (USE_WOFF2)
      find_package(Brotli REQUIRED COMPONENTS dec)
  endif ()
  
 +if (ENABLE_WEBGPU)
 +    find_package(Dawn REQUIRED)
++    SET_AND_EXPOSE_TO_BUILD(HAVE_WEBGPU_IMPLEMENTATION ON)
 +endif ()
 +
  set(bmalloc_LIBRARY_TYPE OBJECT)
