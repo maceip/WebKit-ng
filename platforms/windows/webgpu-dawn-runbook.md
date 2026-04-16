@@ -129,6 +129,28 @@ fields in `validation-report.json` are:
 This intentionally does not prove presentation, canvas swapchain, or rendering.
 Those stay a separate milestone after requestAdapter/requestDevice/queue.
 
+## Runtime Bring-Up Ladder
+
+A green compile only means WebKit and Dawn agree enough to build. Treat it as
+permission to start runtime work, not as proof that WebGPU is usable.
+
+Bring WebGPU up in this order:
+
+1. Confirm `navigator.gpu` exists in MiniBrowser.
+2. Confirm `navigator.gpu.requestAdapter()` resolves.
+3. Confirm `adapter.requestDevice()` resolves.
+4. Confirm `device.queue` exists.
+5. Run a compute-only buffer write/readback test with no canvas.
+6. Create a shader module and compute pipeline.
+7. Submit commands and verify mapped-buffer readback.
+8. Re-enable the Windows presentation/canvas path only after compute works.
+9. Configure a WebGPU canvas and draw one visible triangle.
+10. Add smoke coverage so future compile fixes cannot silently break runtime.
+
+Keep compute and presentation separate while debugging. If compute fails, debug
+WebCore/Dawn object, callback, queue, and buffer plumbing. If compute works but
+canvas fails, debug HWND/surface/swapchain/compositor integration.
+
 ## Worker Hang Avoidance
 
 The historic "green compile but no artifact" failure was a PowerShell hang after
