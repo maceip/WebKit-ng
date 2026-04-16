@@ -1,0 +1,8 @@
+{
+  "id": "windows-minibrowser-fluent-tabs",
+  "title": "Windows MiniBrowser Fluent Tabs Demo",
+  "enabledByDefault": true,
+  "description": "Applies a Windows 11 Fluent/Mica treatment to MiniBrowser and wires the portable tab state model into the Windows build.",
+  "platforms": ["windows"],
+  "patchOrder": ["patches/windows"]
+}

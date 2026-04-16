@@ -1,0 +1,1046 @@
+diff --git a/Tools/MiniBrowser/common/README.md b/Tools/MiniBrowser/common/README.md
+new file mode 100644
+index 000000000000..ab3f461e0f2d
+--- /dev/null
++++ b/Tools/MiniBrowser/common/README.md
+@@ -0,0 +1,41 @@
++# MiniBrowser Tab Surface
++
++`TabbedBrowsingModel` is the shared state layer for MiniBrowser tabbed browsing.
++It intentionally has no platform UI dependencies.
++
++The model owns:
++
++- stable tab IDs
++- selection
++- URL, title, loading, back/forward state
++- pinned-tab ordering
++- attention state
++- horizontal vs vertical tab mode
++- vertical tab collapse and width state
++
++Platform code owns:
++
++- Win32 toolbar/sidebar rendering
++- AppKit toolbar/sidebar rendering
++- WPE/Android rendering
++- native accelerators and context menus
++- creating, hiding, showing, and destroying actual web views
++
++Vertical tabs follow Chromium's useful split between tab collection state and
++per-window vertical-strip state. The model exposes the state; each platform is
++free to draw either a horizontal strip or a vertical strip from the same data.
++
++## Later: Extension UI
++
++After tabbed browsing is stable, add the product-owned extension surfaces on top
++of this model:
++
++- extension action button state per active tab
++- popup host anchoring to horizontal and vertical tab layouts
++- extension manager page
++- permission prompts
++- context menu entries
++- `tabs.*` event emission from tab model changes
++
++This should stay separate from the WebExtensions API shim. The API shim owns
++extension behavior; this UI layer only renders extension controls and prompts.
+diff --git a/Tools/MiniBrowser/common/TabbedBrowsingModel.cpp b/Tools/MiniBrowser/common/TabbedBrowsingModel.cpp
+new file mode 100644
+index 000000000000..a099890f3742
+--- /dev/null
++++ b/Tools/MiniBrowser/common/TabbedBrowsingModel.cpp
+@@ -0,0 +1,279 @@
++/*
++ * Copyright (C) 2026 The WebKit project authors. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
++ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
++ * CONSEQUENTIAL DAMAGES (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
++ * WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
++ * OF SUCH DAMAGE.
++ */
++
++#include "TabbedBrowsingModel.h"
++
++#include <algorithm>
++#include <utility>
++
++namespace MiniBrowser {
++
++namespace {
++
++int clampVerticalWidth(int width)
++{
++    return std::clamp(width, VerticalTabStripState::minimumUncollapsedWidth, VerticalTabStripState::maximumUncollapsedWidth);
++}
++
++} // namespace
++
++TabbedBrowsingModel::TabbedBrowsingModel() = default;
++TabbedBrowsingModel::~TabbedBrowsingModel() = default;
++
++void TabbedBrowsingModel::addObserver(Observer& observer)
++{
++    if (std::find(m_observers.begin(), m_observers.end(), &observer) == m_observers.end())
++        m_observers.push_back(&observer);
++}
++
++void TabbedBrowsingModel::removeObserver(Observer& observer)
++{
++    m_observers.erase(std::remove(m_observers.begin(), m_observers.end(), &observer), m_observers.end());
++}
++
++int TabbedBrowsingModel::appendTab(std::string url, bool selected)
++{
++    TabState tab;
++    tab.id = m_nextTabID++;
++    tab.title = url.empty() ? "New Tab" : url;
++    tab.url = std::move(url);
++
++    const int tabID = tab.id;
++    m_tabs.push_back(std::move(tab));
++
++    if (selected || !m_selectedTabID)
++        m_selectedTabID = tabID;
++
++    notifyChanged();
++    return tabID;
++}
++
++bool TabbedBrowsingModel::closeTab(int tabID)
++{
++    auto iterator = findTab(tabID);
++    if (iterator == m_tabs.end())
++        return false;
++
++    const bool closedSelectedTab = m_selectedTabID == tabID;
++    const size_t closedIndex = static_cast<size_t>(std::distance(m_tabs.begin(), iterator));
++    m_tabs.erase(iterator);
++
++    if (m_tabs.empty())
++        m_selectedTabID.reset();
++    else if (closedSelectedTab)
++        m_selectedTabID = m_tabs[std::min(closedIndex, m_tabs.size() - 1)].id;
++
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::selectTab(int tabID)
++{
++    if (m_selectedTabID == tabID)
++        return true;
++
++    if (findTab(tabID) == m_tabs.end())
++        return false;
++
++    m_selectedTabID = tabID;
++    if (auto* selected = tab(tabID))
++        selected->needsAttention = false;
++
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::moveTab(int tabID, size_t destinationIndex)
++{
++    auto iterator = findTab(tabID);
++    if (iterator == m_tabs.end())
++        return false;
++
++    TabState movedTab = std::move(*iterator);
++    const bool movedPinnedTab = movedTab.pinned;
++    m_tabs.erase(iterator);
++
++    const size_t firstUnpinnedIndex = pinnedTabCount();
++    if (movedPinnedTab)
++        destinationIndex = std::min(destinationIndex, firstUnpinnedIndex);
++    else
++        destinationIndex = std::max(destinationIndex, firstUnpinnedIndex);
++
++    destinationIndex = std::min(destinationIndex, m_tabs.size());
++    m_tabs.insert(m_tabs.begin() + destinationIndex, std::move(movedTab));
++
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::setTabURL(int tabID, std::string url)
++{
++    auto* target = tab(tabID);
++    if (!target)
++        return false;
++
++    target->url = std::move(url);
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::setTabTitle(int tabID, std::string title)
++{
++    auto* target = tab(tabID);
++    if (!target)
++        return false;
++
++    target->title = std::move(title);
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::setTabLoadingState(int tabID, bool loading, bool canGoBack, bool canGoForward)
++{
++    auto* target = tab(tabID);
++    if (!target)
++        return false;
++
++    target->loading = loading;
++    target->canGoBack = canGoBack;
++    target->canGoForward = canGoForward;
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::setTabPinned(int tabID, bool pinned)
++{
++    auto* target = tab(tabID);
++    if (!target)
++        return false;
++
++    if (target->pinned == pinned)
++        return true;
++
++    target->pinned = pinned;
++    enforcePinnedTabOrdering(tabID);
++    notifyChanged();
++    return true;
++}
++
++bool TabbedBrowsingModel::setTabNeedsAttention(int tabID, bool needsAttention)
++{
++    auto* target = tab(tabID);
++    if (!target)
++        return false;
++
++    target->needsAttention = needsAttention && m_selectedTabID != tabID;
++    notifyChanged();
++    return true;
++}
++
++void TabbedBrowsingModel::setTabStripMode(TabStripMode mode)
++{
++    if (m_tabStripMode == mode)
++        return;
++
++    m_tabStripMode = mode;
++    notifyChanged();
++}
++
++void TabbedBrowsingModel::setVerticalTabStripCollapsed(bool collapsed)
++{
++    if (m_verticalTabStripState.collapsed == collapsed)
++        return;
++
++    m_verticalTabStripState.collapsed = collapsed;
++    notifyChanged();
++}
++
++void TabbedBrowsingModel::setVerticalTabStripUncollapsedWidth(int width)
++{
++    const int clampedWidth = clampVerticalWidth(width);
++    if (m_verticalTabStripState.uncollapsedWidth == clampedWidth)
++        return;
++
++    m_verticalTabStripState.uncollapsedWidth = clampedWidth;
++    notifyChanged();
++}
++
++const TabState* TabbedBrowsingModel::tab(int tabID) const
++{
++    auto iterator = findTab(tabID);
++    return iterator == m_tabs.end() ? nullptr : &*iterator;
++}
++
++TabState* TabbedBrowsingModel::tab(int tabID)
++{
++    auto iterator = findTab(tabID);
++    return iterator == m_tabs.end() ? nullptr : &*iterator;
++}
++
++const TabState* TabbedBrowsingModel::selectedTab() const
++{
++    return m_selectedTabID ? tab(*m_selectedTabID) : nullptr;
++}
++
++TabbedBrowsingModel::TabIterator TabbedBrowsingModel::findTab(int tabID)
++{
++    return std::find_if(m_tabs.begin(), m_tabs.end(), [tabID](const auto& tab) {
++        return tab.id == tabID;
++    });
++}
++
++TabbedBrowsingModel::ConstTabIterator TabbedBrowsingModel::findTab(int tabID) const
++{
++    return std::find_if(m_tabs.begin(), m_tabs.end(), [tabID](const auto& tab) {
++        return tab.id == tabID;
++    });
++}
++
++size_t TabbedBrowsingModel::pinnedTabCount() const
++{
++    return static_cast<size_t>(std::count_if(m_tabs.begin(), m_tabs.end(), [](const auto& tab) {
++        return tab.pinned;
++    }));
++}
++
++void TabbedBrowsingModel::enforcePinnedTabOrdering(int tabID)
++{
++    auto iterator = findTab(tabID);
++    if (iterator == m_tabs.end())
++        return;
++
++    const bool pinned = iterator->pinned;
++    size_t targetIndex = pinned ? pinnedTabCount() - 1 : pinnedTabCount();
++    TabState movedTab = std::move(*iterator);
++    m_tabs.erase(iterator);
++
++    targetIndex = std::min(targetIndex, m_tabs.size());
++    m_tabs.insert(m_tabs.begin() + targetIndex, std::move(movedTab));
++}
++
++void TabbedBrowsingModel::notifyChanged()
++{
++    auto observers = m_observers;
++    for (auto* observer : observers) {
++        if (std::find(m_observers.begin(), m_observers.end(), observer) != m_observers.end())
++            observer->tabbedBrowsingModelDidChange(*this);
++    }
++}
++
++} // namespace MiniBrowser
+diff --git a/Tools/MiniBrowser/common/TabbedBrowsingModel.h b/Tools/MiniBrowser/common/TabbedBrowsingModel.h
+new file mode 100644
+index 000000000000..c8e80b56ef06
+--- /dev/null
++++ b/Tools/MiniBrowser/common/TabbedBrowsingModel.h
+@@ -0,0 +1,122 @@
++/*
++ * Copyright (C) 2026 The WebKit project authors. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
++ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
++ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
++ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
++ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
++ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
++ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
++ * THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#pragma once
++
++#include <optional>
++#include <string>
++#include <vector>
++
++namespace MiniBrowser {
++
++enum class TabStripMode {
++    Horizontal,
++    Vertical
++};
++
++struct VerticalTabStripState {
++    static constexpr int defaultUncollapsedWidth = 240;
++    static constexpr int minimumUncollapsedWidth = 160;
++    static constexpr int maximumUncollapsedWidth = 480;
++
++    bool collapsed { false };
++    int uncollapsedWidth { defaultUncollapsedWidth };
++};
++
++struct TabState {
++    int id { 0 };
++    std::string url;
++    std::string title;
++    bool loading { false };
++    bool canGoBack { false };
++    bool canGoForward { false };
++    bool pinned { false };
++    bool needsAttention { false };
++};
++
++class TabbedBrowsingModel {
++public:
++    class Observer {
++    public:
++        virtual void tabbedBrowsingModelDidChange(const TabbedBrowsingModel&) = 0;
++
++    protected:
++        virtual ~Observer() = default;
++    };
++
++    TabbedBrowsingModel();
++    TabbedBrowsingModel(const TabbedBrowsingModel&) = delete;
++    TabbedBrowsingModel& operator=(const TabbedBrowsingModel&) = delete;
++    ~TabbedBrowsingModel();
++
++    void addObserver(Observer&);
++    void removeObserver(Observer&);
++
++    int appendTab(std::string url, bool selected = true);
++    bool closeTab(int tabID);
++    bool selectTab(int tabID);
++    bool moveTab(int tabID, size_t destinationIndex);
++
++    bool setTabURL(int tabID, std::string);
++    bool setTabTitle(int tabID, std::string);
++    bool setTabLoadingState(int tabID, bool loading, bool canGoBack, bool canGoForward);
++    bool setTabPinned(int tabID, bool pinned);
++    bool setTabNeedsAttention(int tabID, bool needsAttention);
++
++    void setTabStripMode(TabStripMode);
++    void setVerticalTabStripCollapsed(bool);
++    void setVerticalTabStripUncollapsedWidth(int);
++
++    const std::vector<TabState>& tabs() const { return m_tabs; }
++    const TabState* tab(int tabID) const;
++    TabState* tab(int tabID);
++    const TabState* selectedTab() const;
++
++    std::optional<int> selectedTabID() const { return m_selectedTabID; }
++    TabStripMode tabStripMode() const { return m_tabStripMode; }
++    const VerticalTabStripState& verticalTabStripState() const { return m_verticalTabStripState; }
++
++    bool empty() const { return m_tabs.empty(); }
++    size_t size() const { return m_tabs.size(); }
++
++private:
++    using TabIterator = std::vector<TabState>::iterator;
++    using ConstTabIterator = std::vector<TabState>::const_iterator;
++
++    TabIterator findTab(int tabID);
++    ConstTabIterator findTab(int tabID) const;
++    size_t pinnedTabCount() const;
++    void enforcePinnedTabOrdering(int tabID);
++    void notifyChanged();
++
++    int m_nextTabID { 1 };
++    std::optional<int> m_selectedTabID;
++    TabStripMode m_tabStripMode { TabStripMode::Horizontal };
++    VerticalTabStripState m_verticalTabStripState;
++    std::vector<TabState> m_tabs;
++    std::vector<Observer*> m_observers;
++};
++
++} // namespace MiniBrowser
+diff --git a/Tools/MiniBrowser/win/CMakeLists.txt b/Tools/MiniBrowser/win/CMakeLists.txt
+index fba0731ac336..a27234d904fc 100644
+--- a/Tools/MiniBrowser/win/CMakeLists.txt
++++ b/Tools/MiniBrowser/win/CMakeLists.txt
+@@ -1,8 +1,10 @@
+ set(MiniBrowser_PRIVATE_INCLUDE_DIRECTORIES
+     ${CMAKE_BINARY_DIR}
++    ${TOOLS_DIR}/MiniBrowser/common
+ )
+ 
+ set(MiniBrowser_SOURCES
++    ${TOOLS_DIR}/MiniBrowser/common/TabbedBrowsingModel.cpp
+     BrowserWindow.cpp
+     Common.cpp
+     Common2.cpp
+@@ -17,8 +19,10 @@ set(MiniBrowser_SOURCES
+ set(MiniBrowser_PRIVATE_DEFINITIONS _UNICODE)
+ set(MiniBrowser_PRIVATE_LIBRARIES
+     comctl32
++    dwmapi
+     shlwapi
+     user32
++    uxtheme
+ )
+ set(MiniBrowser_FRAMEWORKS
+     JavaScriptCore
+diff --git a/Tools/MiniBrowser/win/MainWindow.cpp b/Tools/MiniBrowser/win/MainWindow.cpp
+index f6fff84c2ade..00e8353ed75c 100644
+--- a/Tools/MiniBrowser/win/MainWindow.cpp
++++ b/Tools/MiniBrowser/win/MainWindow.cpp
+@@ -29,7 +29,9 @@
+ #include "Common.h"
+ #include "MiniBrowserLibResource.h"
+ #include "WebKitBrowserWindow.h"
++#include <dwmapi.h>
+ #include <sstream>
++#include <uxtheme.h>
+ 
+ namespace WebCore {
+ float deviceScaleFactorForWindow(HWND);
+@@ -40,12 +42,109 @@ static const wchar_t* kMiniBrowserRegistryKey = L"Software\\WebKit\\MiniBrowser"
+ static constexpr int kToolbarImageSize = 32;
+ static constexpr int kToolbarURLBarIndex = 4;
+ static constexpr int kToolbarProgressIndicatorIndex = 5;
++static constexpr COLORREF kFluentToolbarTextColor = RGB(242, 246, 255);
++static constexpr COLORREF kFluentMutedTextColor = RGB(180, 190, 205);
++static constexpr COLORREF kFluentWindowColor = RGB(24, 28, 34);
++static constexpr COLORREF kFluentToolbarColor = RGB(36, 42, 52);
++static constexpr COLORREF kFluentEditColor = RGB(48, 56, 68);
++
++#ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
++#define DWMWA_USE_IMMERSIVE_DARK_MODE 20
++#endif
++
++#ifndef DWMWA_SYSTEMBACKDROP_TYPE
++#define DWMWA_SYSTEMBACKDROP_TYPE 38
++#endif
++
++#ifndef DWMWA_MICA_EFFECT
++#define DWMWA_MICA_EFFECT 1029
++#endif
++
++#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
++#define DWMWA_WINDOW_CORNER_PREFERENCE 33
++#endif
++
++#ifndef DWMWA_BORDER_COLOR
++#define DWMWA_BORDER_COLOR 34
++#endif
++
++#ifndef DWMWA_CAPTION_COLOR
++#define DWMWA_CAPTION_COLOR 35
++#endif
++
++#ifndef DWMWA_TEXT_COLOR
++#define DWMWA_TEXT_COLOR 36
++#endif
++
++enum DwmSystemBackdropType {
++    DwmSystemBackdropAuto,
++    DwmSystemBackdropNone,
++    DwmSystemBackdropMainWindow,
++    DwmSystemBackdropTransientWindow,
++    DwmSystemBackdropTabbedWindow,
++};
++
++enum DwmWindowCornerPreference {
++    DwmWindowCornerDefault,
++    DwmWindowCornerDoNotRound,
++    DwmWindowCornerRound,
++    DwmWindowCornerRoundSmall,
++};
++
++static void applyDwmMaterial(HWND hwnd, DwmSystemBackdropType preferredBackdrop)
++{
++    BOOL enabled = TRUE;
++    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &enabled, sizeof(enabled));
++
++    DwmWindowCornerPreference cornerPreference = DwmWindowCornerRound;
++    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &cornerPreference, sizeof(cornerPreference));
++
++    DwmSystemBackdropType backdrop = preferredBackdrop;
++    if (FAILED(DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop, sizeof(backdrop)))) {
++        backdrop = DwmSystemBackdropMainWindow;
++        DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop, sizeof(backdrop));
++    }
++
++    DwmSetWindowAttribute(hwnd, DWMWA_MICA_EFFECT, &enabled, sizeof(enabled));
++
++    COLORREF borderColor = RGB(70, 78, 94);
++    COLORREF captionColor = RGB(28, 32, 40);
++    COLORREF textColor = RGB(248, 250, 255);
++#ifdef DWMWA_BORDER_COLOR
++    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &borderColor, sizeof(borderColor));
++#endif
++#ifdef DWMWA_CAPTION_COLOR
++    DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &captionColor, sizeof(captionColor));
++#endif
++#ifdef DWMWA_TEXT_COLOR
++    DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &textColor, sizeof(textColor));
++#endif
++}
+ 
+ static WNDPROC DefEditProc = nullptr;
+ 
+ static LRESULT CALLBACK EditProc(HWND, UINT, WPARAM, LPARAM);
+ static INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
+ 
++static constexpr wchar_t kFluentBackIcon[] = L"\uE72B";
++static constexpr wchar_t kFluentForwardIcon[] = L"\uE72A";
++static constexpr wchar_t kFluentRefreshIcon[] = L"\uE72C";
++static constexpr wchar_t kFluentHomeIcon[] = L"\uE80F";
++
++static std::string utf8FromWideString(const std::wstring& string)
++{
++    if (string.empty())
++        return { };
++
++    int size = WideCharToMultiByte(CP_UTF8, 0, string.c_str(), static_cast<int>(string.length()), nullptr, 0, nullptr, nullptr);
++    if (size <= 0)
++        return { };
++
++    std::string result(size, '\0');
++    WideCharToMultiByte(CP_UTF8, 0, string.c_str(), static_cast<int>(string.length()), result.data(), size, nullptr, nullptr);
++    return result;
++}
++
+ std::wstring MainWindow::s_windowClass;
+ size_t MainWindow::s_numInstances;
+ 
+@@ -93,11 +192,14 @@ bool MainWindow::isInstance(HWND hwnd)
+ 
+ MainWindow::MainWindow()
+ {
++    m_tabModel.addObserver(*this);
+     s_numInstances++;
+ }
+ 
+ MainWindow::~MainWindow()
+ {
++    destroyModernMaterialBrushes();
++    m_tabModel.removeObserver(*this);
+     s_numInstances--;
+ }
+ 
+@@ -118,27 +220,21 @@ void MainWindow::resetFeatureMenu(BrowserWindow::FeatureType featureType, bool r
+ void MainWindow::createToolbar(HINSTANCE hInstance)
+ {
+     m_hToolbarWnd = CreateWindowEx(0, TOOLBARCLASSNAME, nullptr, 
+-        WS_CHILD | WS_BORDER | TBSTYLE_FLAT | TBSTYLE_LIST | TBSTYLE_TOOLTIPS, 0, 0, 0, 0, 
++        WS_CHILD | TBSTYLE_FLAT | TBSTYLE_LIST | TBSTYLE_TOOLTIPS | TBSTYLE_TRANSPARENT, 0, 0, 0, 0,
+         m_hMainWnd, nullptr, hInstance, nullptr);
+         
+     if (!m_hToolbarWnd)
+         return;
+ 
+-    const int ImageListID = 0;
+-
+-    HIMAGELIST hImageList;
+-    hImageList = ImageList_LoadImage(hInstance, MAKEINTRESOURCE(IDB_TOOLBAR), kToolbarImageSize, 0, CLR_DEFAULT, IMAGE_BITMAP, 0);
+-
+-    SendMessage(m_hToolbarWnd, TB_SETIMAGELIST, ImageListID, reinterpret_cast<LPARAM>(hImageList));
+     SendMessage(m_hToolbarWnd, TB_SETEXTENDEDSTYLE, 0, TBSTYLE_EX_DRAWDDARROWS | TBSTYLE_EX_MIXEDBUTTONS);
+ 
+-    const DWORD buttonStyles = BTNS_AUTOSIZE;
++    const DWORD buttonStyles = BTNS_AUTOSIZE | BTNS_SHOWTEXT;
+ 
+     TBBUTTON tbButtons[] = {
+-        { MAKELONG(0, ImageListID), IDM_HISTORY_BACKWARD, TBSTATE_ENABLED, buttonStyles | BTNS_DROPDOWN, { }, 0, (INT_PTR)L"Back" },
+-        { MAKELONG(1, ImageListID), IDM_HISTORY_FORWARD, TBSTATE_ENABLED, buttonStyles | BTNS_DROPDOWN, { }, 0, (INT_PTR)L"Forward"},
+-        { MAKELONG(2, ImageListID), IDM_RELOAD, TBSTATE_ENABLED, buttonStyles, { }, 0, (INT_PTR)L"Reload"},
+-        { MAKELONG(3, ImageListID), IDM_GO_HOME, TBSTATE_ENABLED, buttonStyles, { }, 0, (INT_PTR)L"Home"},
++        { I_IMAGENONE, IDM_HISTORY_BACKWARD, TBSTATE_ENABLED, buttonStyles | BTNS_DROPDOWN, { }, 0, reinterpret_cast<INT_PTR>(kFluentBackIcon) },
++        { I_IMAGENONE, IDM_HISTORY_FORWARD, TBSTATE_ENABLED, buttonStyles | BTNS_DROPDOWN, { }, 0, reinterpret_cast<INT_PTR>(kFluentForwardIcon) },
++        { I_IMAGENONE, IDM_RELOAD, TBSTATE_ENABLED, buttonStyles, { }, 0, reinterpret_cast<INT_PTR>(kFluentRefreshIcon) },
++        { I_IMAGENONE, IDM_GO_HOME, TBSTATE_ENABLED, buttonStyles, { }, 0, reinterpret_cast<INT_PTR>(kFluentHomeIcon) },
+         { 0, 0, TBSTATE_ENABLED, BTNS_SEP, { }, 0, 0}, // URL bar
+         { 0, 0, TBSTATE_ENABLED, BTNS_SEP, { }, 0, 0}, // Progress indicator
+     };
+@@ -149,8 +245,11 @@ void MainWindow::createToolbar(HINSTANCE hInstance)
+     SendMessage(m_hToolbarWnd, TB_ADDBUTTONS, _countof(tbButtons), reinterpret_cast<LPARAM>(&tbButtons));
+     ShowWindow(m_hToolbarWnd, true);
+ 
+-    m_hURLBarWnd = CreateWindow(L"EDIT", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_AUTOHSCROLL, 0, 0, 0, 0, m_hToolbarWnd, 0, hInstance, 0);
++    SetWindowTheme(m_hToolbarWnd, L"Explorer", nullptr);
++
++    m_hURLBarWnd = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", 0, WS_CHILD | WS_VISIBLE | ES_LEFT | ES_AUTOHSCROLL, 0, 0, 0, 0, m_hToolbarWnd, 0, hInstance, 0);
+     m_hProgressIndicator = CreateWindow(L"STATIC", 0, WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE, 0, 0, 0, 0, m_hToolbarWnd, 0, hInstance, 0);
++    SetWindowTheme(m_hURLBarWnd, L"Explorer", nullptr);
+ 
+     DefEditProc = reinterpret_cast<WNDPROC>(GetWindowLongPtr(m_hURLBarWnd, GWLP_WNDPROC));
+     SetWindowLongPtr(m_hURLBarWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(EditProc));
+@@ -208,6 +307,9 @@ bool MainWindow::init(BrowserWindowFactory factory, HINSTANCE hInstance, bool us
+     if (!m_hMainWnd)
+         return false;
+ 
++    createModernMaterialBrushes();
++    applyModernMaterials();
++
+     createToolbar(hInstance);
+     if (!m_hToolbarWnd)
+         return false;
+@@ -219,6 +321,8 @@ bool MainWindow::init(BrowserWindowFactory factory, HINSTANCE hInstance, bool us
+     if (FAILED(hr))
+         return false;
+ 
++    m_tabModel.appendTab({ }, true);
++
+     resetFeatureMenu(BrowserWindow::FeatureType::Experimental);
+     resetFeatureMenu(BrowserWindow::FeatureType::InternalDebug);
+     
+@@ -246,10 +350,82 @@ void MainWindow::resizeSubViews()
+     MoveWindow(m_browserWindow->hwnd(), 0, height, rcClient.right, rcClient.bottom - height, true);
+ }
+ 
++void MainWindow::createModernMaterialBrushes()
++{
++    destroyModernMaterialBrushes();
++    m_hWindowBackgroundBrush = CreateSolidBrush(kFluentWindowColor);
++    m_hToolbarBackgroundBrush = CreateSolidBrush(kFluentToolbarColor);
++    m_hEditBackgroundBrush = CreateSolidBrush(kFluentEditColor);
++}
++
++void MainWindow::destroyModernMaterialBrushes()
++{
++    if (m_hToolbarFont) {
++        DeleteObject(m_hToolbarFont);
++        m_hToolbarFont = nullptr;
++    }
++    if (m_hURLBarFont) {
++        DeleteObject(m_hURLBarFont);
++        m_hURLBarFont = nullptr;
++    }
++    if (m_hToolbarBackgroundBrush) {
++        DeleteObject(m_hToolbarBackgroundBrush);
++        m_hToolbarBackgroundBrush = nullptr;
++    }
++    if (m_hEditBackgroundBrush) {
++        DeleteObject(m_hEditBackgroundBrush);
++        m_hEditBackgroundBrush = nullptr;
++    }
++    if (m_hWindowBackgroundBrush) {
++        DeleteObject(m_hWindowBackgroundBrush);
++        m_hWindowBackgroundBrush = nullptr;
++    }
++}
++
++HBRUSH MainWindow::toolbarBackgroundBrush()
++{
++    if (!m_hToolbarBackgroundBrush)
++        createModernMaterialBrushes();
++    return m_hToolbarBackgroundBrush;
++}
++
++HBRUSH MainWindow::editBackgroundBrush()
++{
++    if (!m_hEditBackgroundBrush)
++        createModernMaterialBrushes();
++    return m_hEditBackgroundBrush;
++}
++
++void MainWindow::applyModernMaterials()
++{
++    applyDwmMaterial(m_hMainWnd, DwmSystemBackdropTabbedWindow);
++}
++
++void MainWindow::applyModernMaterialsToDialog(HWND hwnd)
++{
++    applyDwmMaterial(hwnd, DwmSystemBackdropTransientWindow);
++}
++
+ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+ {
+     LRESULT result = 0;
+     RefPtr<MainWindow> thisWindow = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
++    switch (message) {
++    case WM_CREATE:
++        SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
++        return 0;
++    case WM_ERASEBKGND: {
++        RECT rect;
++        GetClientRect(hWnd, &rect);
++        FillRect(reinterpret_cast<HDC>(wParam), &rect, thisWindow && thisWindow->m_hWindowBackgroundBrush ? thisWindow->m_hWindowBackgroundBrush : reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
++        return 1;
++    }
++    default:
++        if (!thisWindow)
++            return DefWindowProc(hWnd, message, wParam, lParam);
++        break;
++    }
++
+     switch (message) {
+     case WM_ACTIVATE:
+         switch (LOWORD(wParam)) {
+@@ -258,9 +434,6 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
+             SetFocus(thisWindow->browserWindow()->hwnd());
+         }
+         break;
+-    case WM_CREATE:
+-        SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
+-        break;
+     case WM_APPCOMMAND: {
+         auto cmd = GET_APPCOMMAND_LPARAM(lParam);
+         switch (cmd) {
+@@ -389,6 +562,43 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
+     case WM_SIZE:
+         thisWindow->resizeSubViews();
+         break;
++    case WM_CTLCOLORSTATIC:
++        if (reinterpret_cast<HWND>(lParam) == thisWindow->m_hProgressIndicator) {
++            auto hdc = reinterpret_cast<HDC>(wParam);
++            SetBkMode(hdc, TRANSPARENT);
++            SetTextColor(hdc, kFluentMutedTextColor);
++            return reinterpret_cast<LRESULT>(thisWindow->toolbarBackgroundBrush());
++        }
++        break;
++    case WM_CTLCOLOREDIT:
++        if (reinterpret_cast<HWND>(lParam) == thisWindow->m_hURLBarWnd) {
++            auto hdc = reinterpret_cast<HDC>(wParam);
++            SetBkMode(hdc, OPAQUE);
++            SetBkColor(hdc, kFluentEditColor);
++            SetTextColor(hdc, kFluentToolbarTextColor);
++            return reinterpret_cast<LRESULT>(thisWindow->editBackgroundBrush());
++        }
++        break;
++    case WM_NOTIFY: {
++        auto* notifyHeader = reinterpret_cast<NMHDR*>(lParam);
++        if (notifyHeader && notifyHeader->hwndFrom == thisWindow->m_hToolbarWnd && notifyHeader->code == NM_CUSTOMDRAW) {
++            auto* customDraw = reinterpret_cast<NMTBCUSTOMDRAW*>(lParam);
++            switch (customDraw->nmcd.dwDrawStage) {
++            case CDDS_PREPAINT: {
++                RECT rect;
++                GetClientRect(thisWindow->m_hToolbarWnd, &rect);
++                FillRect(customDraw->nmcd.hdc, &rect, thisWindow->toolbarBackgroundBrush());
++                return CDRF_NOTIFYITEMDRAW;
++            }
++            case CDDS_ITEMPREPAINT:
++                customDraw->clrText = kFluentToolbarTextColor;
++                customDraw->clrBtnFace = kFluentToolbarColor;
++                customDraw->clrHighlightHotTrack = RGB(64, 74, 90);
++                return CDRF_DODEFAULT;
++            }
++        }
++        break;
++    }
+     case WM_DPICHANGED: {
+         thisWindow->updateDeviceScaleFactor();
+         thisWindow->browserWindow()->adjustScaleFactors();
+@@ -500,6 +710,7 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+     UNREFERENCED_PARAMETER(lParam);
+     switch (message) {
+     case WM_INITDIALOG:
++        MainWindow::applyModernMaterialsToDialog(hDlg);
+         return (INT_PTR)TRUE;
+ 
+     case WM_COMMAND:
+@@ -514,18 +725,20 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+ 
+ INT_PTR CALLBACK MainWindow::cachesDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+ {
+-    MainWindow& thisWindow = *reinterpret_cast<MainWindow*>(GetWindowLongPtr(hDlg, DWLP_USER));
+     switch (message) {
+     case WM_INITDIALOG:
++        MainWindow::applyModernMaterialsToDialog(hDlg);
+         SetWindowLongPtr(hDlg, DWLP_USER, lParam);
+         ::SetTimer(hDlg, IDT_UPDATE_STATS, 1000, nullptr);
+         return (INT_PTR)TRUE;
+ 
+     case WM_COMMAND:
+         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
++            auto* thisWindow = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hDlg, DWLP_USER));
+             ::KillTimer(hDlg, IDT_UPDATE_STATS);
+             ::DestroyWindow(hDlg);
+-            thisWindow.m_hCacheWnd = 0;
++            if (thisWindow)
++                thisWindow->m_hCacheWnd = 0;
+             return (INT_PTR)TRUE;
+         }
+         break;
+@@ -535,7 +748,8 @@ INT_PTR CALLBACK MainWindow::cachesDialogProc(HWND hDlg, UINT message, WPARAM wP
+         return (INT_PTR)TRUE;
+ 
+     case WM_PAINT:
+-        thisWindow.browserWindow()->updateStatistics(hDlg);
++        if (auto* thisWindow = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hDlg, DWLP_USER)))
++            thisWindow->browserWindow()->updateStatistics(hDlg);
+         break;
+     }
+ 
+@@ -544,9 +758,9 @@ INT_PTR CALLBACK MainWindow::cachesDialogProc(HWND hDlg, UINT message, WPARAM wP
+ 
+ INT_PTR CALLBACK MainWindow::customUserAgentDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+ {
+-    MainWindow& thisWindow = *reinterpret_cast<MainWindow*>(GetWindowLongPtr(hDlg, DWLP_USER));
+     switch (message) {
+     case WM_INITDIALOG: {
++        MainWindow::applyModernMaterialsToDialog(hDlg);
+         MainWindow& thisWindow = *reinterpret_cast<MainWindow*>(lParam);
+         SetWindowLongPtr(hDlg, DWLP_USER, lParam);
+         HWND edit = ::GetDlgItem(hDlg, IDC_USER_AGENT_INPUT);
+@@ -559,6 +773,7 @@ INT_PTR CALLBACK MainWindow::customUserAgentDialogProc(HWND hDlg, UINT message,
+ 
+     case WM_COMMAND:
+         if (LOWORD(wParam) == IDOK) {
++            auto* thisWindow = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hDlg, DWLP_USER));
+             HWND edit = ::GetDlgItem(hDlg, IDC_USER_AGENT_INPUT);
+ 
+             TCHAR buffer[1024];
+@@ -566,9 +781,9 @@ INT_PTR CALLBACK MainWindow::customUserAgentDialogProc(HWND hDlg, UINT message,
+             buffer[strLen] = 0;
+ 
+             _bstr_t bstr(buffer);
+-            if (bstr.length()) {
+-                thisWindow.browserWindow()->setUserAgent(bstr);
+-                thisWindow.toggleMenuItem(IDM_UA_OTHER);
++            if (thisWindow && bstr.length()) {
++                thisWindow->browserWindow()->setUserAgent(bstr);
++                thisWindow->toggleMenuItem(IDM_UA_OTHER);
+             }
+         }
+ 
+@@ -596,6 +811,9 @@ void MainWindow::loadURL(std::wstring url)
+     if (FAILED(m_browserWindow->loadURL(_bstr_t(url.c_str()))))
+         return;
+ 
++    if (auto selectedTabID = m_tabModel.selectedTabID())
++        m_tabModel.setTabURL(*selectedTabID, utf8FromWideString(url));
++
+     SetFocus(m_browserWindow->hwnd());
+ }
+ 
+@@ -618,8 +836,14 @@ void MainWindow::onURLBarEnter()
+ 
+ void MainWindow::updateDeviceScaleFactor()
+ {
+-    if (m_hURLBarFont)
++    if (m_hToolbarFont) {
++        ::DeleteObject(m_hToolbarFont);
++        m_hToolbarFont = nullptr;
++    }
++    if (m_hURLBarFont) {
+         ::DeleteObject(m_hURLBarFont);
++        m_hURLBarFont = nullptr;
++    }
+ 
+     rescaleToolbar();
+ 
+@@ -628,12 +852,18 @@ void MainWindow::updateDeviceScaleFactor()
+     int fontHeight = rect.bottom * 3. / 4;
+ 
+     m_hURLBarFont = ::CreateFont(fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+-        OUT_TT_ONLY_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FF_DONTCARE, L"Tahoma");
++        OUT_TT_ONLY_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FF_DONTCARE, L"Segoe UI Variable Text");
++    m_hToolbarFont = ::CreateFont(fontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
++        OUT_TT_ONLY_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FF_DONTCARE, L"Segoe Fluent Icons");
++    ::SendMessage(m_hToolbarWnd, static_cast<UINT>(WM_SETFONT), reinterpret_cast<WPARAM>(m_hToolbarFont), TRUE);
+     ::SendMessage(m_hURLBarWnd, static_cast<UINT>(WM_SETFONT), reinterpret_cast<WPARAM>(m_hURLBarFont), TRUE);
+ }
+ 
+ void MainWindow::progressChanged(double progress)
+ {
++    if (auto selectedTabID = m_tabModel.selectedTabID())
++        m_tabModel.setTabLoadingState(*selectedTabID, true, false, false);
++
+     std::wostringstream text;
+     text << static_cast<int>(progress * 100) << L'%';
+     SetWindowText(m_hProgressIndicator, text.str().c_str());
+@@ -641,10 +871,33 @@ void MainWindow::progressChanged(double progress)
+ 
+ void MainWindow::progressFinished()
+ {
++    if (auto selectedTabID = m_tabModel.selectedTabID())
++        m_tabModel.setTabLoadingState(*selectedTabID, false, false, false);
++
+     SetWindowText(m_hProgressIndicator, L"");
+ }
+ 
+ void MainWindow::activeURLChanged(std::wstring url)
+ {
++    if (auto selectedTabID = m_tabModel.selectedTabID())
++        m_tabModel.setTabURL(*selectedTabID, utf8FromWideString(url));
++
+     SetWindowText(m_hURLBarWnd, url.c_str());
+ }
++
++void MainWindow::setUsesVerticalTabs(bool usesVerticalTabs)
++{
++    m_tabModel.setTabStripMode(usesVerticalTabs ? MiniBrowser::TabStripMode::Vertical : MiniBrowser::TabStripMode::Horizontal);
++}
++
++void MainWindow::setVerticalTabsCollapsed(bool collapsed)
++{
++    m_tabModel.setVerticalTabStripCollapsed(collapsed);
++}
++
++void MainWindow::tabbedBrowsingModelDidChange(const MiniBrowser::TabbedBrowsingModel&)
++{
++    // Platform rendering will observe this once horizontal and vertical tab
++    // controls are added. Keeping this callback wired now makes tab state the
++    // single source of truth before UI rendering lands.
++}
+diff --git a/Tools/MiniBrowser/win/MainWindow.h b/Tools/MiniBrowser/win/MainWindow.h
+index 82c6fe6b580d..945951be6a3b 100644
+--- a/Tools/MiniBrowser/win/MainWindow.h
++++ b/Tools/MiniBrowser/win/MainWindow.h
+@@ -26,12 +26,13 @@
+ #pragma once
+ 
+ #include "BrowserWindow.h"
++#include "TabbedBrowsingModel.h"
+ #include <functional>
+ #include <memory>
+ #include <string>
+ #include <wtf/RefPtr.h>
+ 
+-class MainWindow final : public RefCounted<MainWindow>, public BrowserWindowClient {
++class MainWindow final : public RefCounted<MainWindow>, public BrowserWindowClient, public MiniBrowser::TabbedBrowsingModel::Observer {
+ public:
+     using BrowserWindowFactory = std::function<Ref<BrowserWindow>(BrowserWindowClient&, HWND mainWnd, bool usesLayeredWebView)>;
+ 
+@@ -43,9 +44,12 @@ public:
+     void resizeSubViews();
+     HWND hwnd() const { return m_hMainWnd; }
+     BrowserWindow* browserWindow() const { return m_browserWindow.get(); }
++    const MiniBrowser::TabbedBrowsingModel& tabModel() const { return m_tabModel; }
+ 
+     void loadURL(std::wstring);
+     void goHome();
++    void setUsesVerticalTabs(bool);
++    void setVerticalTabsCollapsed(bool);
+ 
+     static bool isInstance(HWND);
+     
+@@ -67,18 +71,32 @@ private:
+     void createToolbar(HINSTANCE);
+     void resizeToolbar(int);
+     void rescaleToolbar();
++    void applyModernMaterials();
++    static void applyModernMaterialsToDialog(HWND);
++    void createModernMaterialBrushes();
++    void destroyModernMaterialBrushes();
++    HBRUSH toolbarBackgroundBrush();
++    HBRUSH editBackgroundBrush();
+ 
+     // BrowserWindowClient
+     void progressChanged(double) final;
+     void progressFinished() final;
+     void activeURLChanged(std::wstring) final;
+ 
++    // MiniBrowser::TabbedBrowsingModel::Observer
++    void tabbedBrowsingModelDidChange(const MiniBrowser::TabbedBrowsingModel&) final;
++
+     HWND m_hMainWnd { nullptr };
+     HWND m_hToolbarWnd { nullptr };
+     HWND m_hURLBarWnd { nullptr };
+     HWND m_hProgressIndicator { nullptr };
+     HWND m_hCacheWnd { nullptr };
++    HGDIOBJ m_hToolbarFont { nullptr };
+     HGDIOBJ m_hURLBarFont { nullptr };
++    HBRUSH m_hToolbarBackgroundBrush { nullptr };
++    HBRUSH m_hEditBackgroundBrush { nullptr };
++    HBRUSH m_hWindowBackgroundBrush { nullptr };
+     RefPtr<BrowserWindow> m_browserWindow;
++    MiniBrowser::TabbedBrowsingModel m_tabModel;
+     int m_toolbarItemsWidth { };
+ };
