@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, createReadStream, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +12,17 @@ const port = Number(process.env.PORT || 8787);
 const running = new Map();
 
 mkdirSync(logDir, { recursive: true });
+
+class HttpError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+function badRequest(message) {
+  throw new HttpError(400, message);
+}
 
 function now() {
   return new Date().toISOString();
@@ -51,17 +62,17 @@ async function body(req) {
 function normalizeStringRecord(value, label) {
   if (value === undefined || value === null) return {};
   if (typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${label} must be an object of string keys and string/number/boolean values`);
+    badRequest(`${label} must be an object of string keys and string/number/boolean values`);
   }
 
   const result = {};
   for (const [key, raw] of Object.entries(value)) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-      throw new Error(`${label}.${key} is not a valid environment variable name`);
+      badRequest(`${label}.${key} is not a valid environment variable name`);
     }
     if (raw === undefined || raw === null) continue;
     if (!['string', 'number', 'boolean'].includes(typeof raw)) {
-      throw new Error(`${label}.${key} must be a string, number, or boolean`);
+      badRequest(`${label}.${key} must be a string, number, or boolean`);
     }
     result[key] = String(raw);
   }
@@ -72,11 +83,96 @@ function validateBuildEnvPayload(payload) {
   normalizeStringRecord(payload.env, 'env');
   const platformEnv = payload.platformEnv || {};
   if (typeof platformEnv !== 'object' || Array.isArray(platformEnv)) {
-    throw new Error('platformEnv must be an object keyed by platform');
+    badRequest('platformEnv must be an object keyed by platform');
   }
   for (const [platform, env] of Object.entries(platformEnv)) {
     normalizeStringRecord(env, `platformEnv.${platform}`);
   }
+}
+
+function platformConfig() {
+  return readJsonFile(join(root, 'config', 'platforms.json')).platforms || {};
+}
+
+function normalizePlatforms(value) {
+  const platforms = value || ['android', 'windows', 'macos'];
+  if (!Array.isArray(platforms) || platforms.length === 0) {
+    badRequest('platforms must be a non-empty array');
+  }
+
+  const configs = platformConfig();
+  const seen = new Set();
+  const result = [];
+  for (const platform of platforms) {
+    if (typeof platform !== 'string' || !platform) {
+      badRequest('platforms entries must be non-empty strings');
+    }
+    const config = configs[platform];
+    if (!config) {
+      badRequest(`Unknown platform: ${platform}`);
+    }
+    if (config.status === 'empty') {
+      badRequest(`Platform is not wired yet: ${platform}`);
+    }
+    if (!seen.has(platform)) {
+      seen.add(platform);
+      result.push(platform);
+    }
+  }
+  return result;
+}
+
+function normalizePresetPayload(value) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    badRequest('presets must be an object keyed by platform');
+  }
+
+  const result = {};
+  for (const [platform, raw] of Object.entries(value)) {
+    if (typeof raw !== 'string') {
+      badRequest(`presets.${platform} must be a string`);
+    }
+    result[platform] = raw;
+  }
+  return result;
+}
+
+function expandBuildRequest(payload, platforms) {
+  const presets = normalizePresetPayload(payload.presets || payload.platformPresets);
+  const configs = platformConfig();
+  const platformEnv = {};
+
+  for (const platform of platforms) {
+    const presetName = presets[platform];
+    const configuredPreset = presetName ? configs[platform]?.presets?.[presetName] : null;
+    if (presetName && !configuredPreset) {
+      badRequest(`Unknown preset for ${platform}: ${presetName}`);
+    }
+    platformEnv[platform] = {
+      ...normalizeStringRecord(configuredPreset?.env, `presets.${platform}.${presetName}.env`),
+      ...normalizeStringRecord(payload.platformEnv?.[platform], `platformEnv.${platform}`)
+    };
+  }
+
+  return {
+    ...payload,
+    presets,
+    platformEnv
+  };
+}
+
+function artifactPrefixForPlatform(id, platform, request) {
+  const env = {
+    ...process.env,
+    ...normalizeStringRecord(request.env, 'env'),
+    ...normalizeStringRecord(request.platformEnv?.[platform], `platformEnv.${platform}`)
+  };
+  const bucket = env.NG_ARTIFACT_BUCKET || 's3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit';
+  if (platform === 'windows') return env.NG_WINDOWS_ARTIFACT_S3 || `${bucket}/windows/${id}`;
+  if (platform === 'macos') return env.NG_MACOS_ARTIFACT_S3 || `${bucket}/macos/${id}`;
+  if (platform === 'android') return env.NG_ANDROID_ARTIFACT_S3 || `${bucket}/android/${id}`;
+  return `${bucket}/${platform}/${id}`;
 }
 
 function buildEnvForPlatform(build, platform) {
@@ -103,6 +199,15 @@ function startPlatformBuild(build, platform) {
   child.stderr.pipe(logStream, { end: false });
 
   running.set(`${build.id}:${platform}`, child);
+  const started = loadState();
+  const storedBuild = started.builds.find((item) => item.id === build.id);
+  const storedPlatform = storedBuild?.platforms.find((item) => item.name === platform);
+  if (storedPlatform) {
+    storedPlatform.pid = child.pid;
+    storedPlatform.startedAt = now();
+    saveState(started);
+  }
+
   child.on('exit', (code, signal) => {
     running.delete(`${build.id}:${platform}`);
     logStream.end();
@@ -134,7 +239,8 @@ function createBuild(platforms, meta = {}) {
     platforms: platforms.map((name) => ({
       name,
       status: 'running',
-      log: join(logDir, `${id}-${name}.service.log`)
+      log: join(logDir, `${id}-${name}.service.log`),
+      artifactPrefix: artifactPrefixForPlatform(id, name, meta)
     })),
     request: meta
   };
@@ -153,18 +259,33 @@ function readJsonFile(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function routeParts(url) {
-  return new URL(url, `http://127.0.0.1:${port}`).pathname.split('/').filter(Boolean);
+function requestUrl(url) {
+  return new URL(url, `http://127.0.0.1:${port}`);
+}
+
+function tailTextFile(path, lineCount) {
+  const lines = Math.max(1, Math.min(Number(lineCount) || 200, 5000));
+  const stats = statSync(path);
+  const bytesToRead = Math.min(stats.size, Math.max(64 * 1024, lines * 300));
+  const buffer = Buffer.alloc(bytesToRead);
+  const fd = openSync(path, 'r');
+  try {
+    readSync(fd, buffer, 0, bytesToRead, stats.size - bytesToRead);
+  } finally {
+    closeSync(fd);
+  }
+  return buffer.toString('utf8').split(/\r?\n/).slice(-lines).join('\n');
 }
 
 const server = http.createServer(async (req, res) => {
   try {
-    const parts = routeParts(req.url);
+    const url = requestUrl(req.url);
+    const parts = url.pathname.split('/').filter(Boolean);
 
     if (req.method === 'GET' && parts.length === 0) {
       return json(res, 200, {
         name: 'ng-webkit build service',
-        endpoints: ['GET /platforms', 'GET /builds', 'POST /builds', 'GET /builds/:id', 'POST /builds/:id/restart', 'POST /builds/:id/checkpoint', 'POST /builds/:id/cancel']
+        endpoints: ['GET /platforms', 'GET /builds', 'POST /builds', 'GET /builds/:id', 'GET /builds/:id/artifacts', 'GET /builds/:id/logs/:platform?tail=200', 'POST /builds/:id/restart', 'POST /builds/:id/checkpoint', 'POST /builds/:id/cancel']
       });
     }
 
@@ -193,9 +314,9 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && parts[0] === 'builds' && parts.length === 1) {
       const payload = await body(req);
-      const platforms = payload.platforms || ['android', 'windows', 'macos'];
+      const platforms = normalizePlatforms(payload.platforms);
       validateBuildEnvPayload(payload);
-      return json(res, 202, createBuild(platforms, payload));
+      return json(res, 202, createBuild(platforms, expandBuildRequest(payload, platforms)));
     }
 
     if (parts[0] === 'builds' && parts[1]) {
@@ -204,10 +325,25 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === 'GET' && parts.length === 2) return json(res, 200, build);
 
+      if (req.method === 'GET' && parts[2] === 'artifacts' && parts.length === 3) {
+        return json(res, 200, {
+          buildId: build.id,
+          platforms: build.platforms.map((platform) => ({
+            name: platform.name,
+            status: platform.status,
+            artifactPrefix: platform.artifactPrefix
+          }))
+        });
+      }
+
       if (req.method === 'GET' && parts[2] === 'logs' && parts[3]) {
         const platform = parts[3];
         const logPath = join(logDir, `${build.id}-${platform}.service.log`);
         if (!existsSync(logPath)) return json(res, 404, { error: 'log not found' });
+        if (url.searchParams.has('tail')) {
+          res.writeHead(200, { 'content-type': 'text/plain' });
+          return res.end(tailTextFile(logPath, url.searchParams.get('tail')));
+        }
         res.writeHead(200, { 'content-type': 'text/plain' });
         return createReadStream(logPath).pipe(res);
       }
@@ -230,15 +366,17 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === 'POST' && parts[2] === 'restart') {
         const payload = await body(req);
-        const platforms = payload.platforms || build.platforms.map((platform) => platform.name);
+        const platforms = normalizePlatforms(payload.platforms || build.platforms.map((platform) => platform.name));
         validateBuildEnvPayload(payload);
-        return json(res, 202, createBuild(platforms, { reason: `restart of ${build.id}`, restartedFrom: build.id, ...payload }));
+        const request = expandBuildRequest({ reason: `restart of ${build.id}`, restartedFrom: build.id, ...payload }, platforms);
+        return json(res, 202, createBuild(platforms, request));
       }
     }
 
     return json(res, 404, { error: 'not found' });
   } catch (error) {
-    return json(res, 500, { error: error.message, stack: process.env.NODE_ENV === 'production' ? undefined : error.stack });
+    const status = error.statusCode || (error instanceof SyntaxError ? 400 : 500);
+    return json(res, status, { error: error.message, stack: process.env.NODE_ENV === 'production' ? undefined : error.stack });
   }
 });
 

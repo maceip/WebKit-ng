@@ -6,9 +6,7 @@ updated when the build runner learns a new Windows-specific failure mode.
 ## Canonical Command
 
 ```bash
-NG_WINDOWS_SOURCE_PRESET=iangrunert-win-gigacage-skia-fixes \
-NG_WINDOWS_ENABLE_WEBGPU=1 \
-./scripts/run-build.sh windows <build-id>
+./scripts/run-windows-webgpu-dawn.sh <build-id>
 ```
 
 Equivalent web runner request:
@@ -19,13 +17,24 @@ curl -X POST http://localhost:8787/builds \
   -d '{
     "platforms": ["windows"],
     "reason": "windows webgpu dawn",
-    "platformEnv": {
-      "windows": {
-        "NG_WINDOWS_SOURCE_PRESET": "iangrunert-win-gigacage-skia-fixes",
-        "NG_WINDOWS_ENABLE_WEBGPU": "1"
-      }
-    }
+    "presets": { "windows": "webgpu-dawn" }
   }'
+```
+
+Useful service reads while the build is running:
+
+```bash
+curl http://localhost:8787/builds/<build-id>
+curl 'http://localhost:8787/builds/<build-id>/logs/windows?tail=200'
+curl http://localhost:8787/builds/<build-id>/artifacts
+```
+
+Expanded equivalent, for debugging without presets:
+
+```bash
+NG_WINDOWS_SOURCE_PRESET=iangrunert-win-gigacage-skia-fixes \
+NG_WINDOWS_ENABLE_WEBGPU=1 \
+./scripts/run-build.sh windows <build-id>
 ```
 
 ## Current Known-Good
@@ -40,6 +49,9 @@ curl -X POST http://localhost:8787/builds \
 - Compile result: all 9559 targets linked, including `bin\TestWebKit.exe`
 - Dawn load check: `validation-recovered.json` reports
   `webgpuDawnLoadAfterMatchingAbseil.loaded=true`.
+- Current milestone probe: `validation-report.json.runtime.smokePassed=true`
+  means MiniBrowser exposed `navigator.gpu`, returned an adapter, created a
+  device, and exposed `device.queue`.
 
 ## Build Runner Rules
 
@@ -51,6 +63,9 @@ curl -X POST http://localhost:8787/builds \
    green compile line.
 5. Treat `BUILD_DONE.txt` as "uploaded to S3", not "remote-build.ps1 returned".
 6. Upload logs, manifests, validation JSON, probe HTML, and the archive.
+7. For WebGPU/Dawn, use `scripts/run-windows-webgpu-dawn.sh` or the
+   `webgpu-dawn` service preset so the source branch and feature flags remain
+   repo-owned.
 
 ## WebGPU/Dawn Build Requirements
 
@@ -92,6 +107,27 @@ The acceptance JSON must show:
   }
 }
 ```
+
+## Runtime Probe Acceptance
+
+The Windows validation phase writes `validate-probe.html` and launches
+`MiniBrowser.exe` against it. For the first Dawn API milestone, the important
+fields in `validation-report.json` are:
+
+```json
+{
+  "runtime": {
+    "gpuAvailable": true,
+    "adapter": {},
+    "device": {},
+    "queueAvailable": true,
+    "smokePassed": true
+  }
+}
+```
+
+This intentionally does not prove presentation, canvas swapchain, or rendering.
+Those stay a separate milestone after requestAdapter/requestDevice/queue.
 
 ## Worker Hang Avoidance
 

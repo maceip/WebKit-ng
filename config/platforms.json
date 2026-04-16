@@ -31,6 +31,7 @@
             "webgpu_dawn.dll is packaged next to MiniBrowser.exe",
             "webgpu_dawn.dll loads with LOAD_WITH_ALTERED_SEARCH_PATH",
             "packaged abseil_dll.dll matches Dawn's Abseil inline namespace",
+            "validation-report.json runtime smoke shows adapter, device, and queue",
             "BUILD_DONE.txt is written only after S3 sync succeeds"
           ]
         }

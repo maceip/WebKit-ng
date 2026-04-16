@@ -28,7 +28,8 @@ GET  /platforms                     config/platforms.json, including presets
 GET  /builds                        list all builds (from var/state.json)
 POST /builds                        start a new build
 GET  /builds/:id                    get a single build
-GET  /builds/:id/logs/:platform     stream the per-platform service log
+GET  /builds/:id/artifacts          expected S3 artifact prefixes per platform
+GET  /builds/:id/logs/:platform     stream the per-platform service log; add ?tail=200 for recent lines
 POST /builds/:id/checkpoint         append a checkpoint note
 POST /builds/:id/cancel             SIGTERM the running child processes
 POST /builds/:id/restart            re-run the same build id
@@ -53,18 +54,13 @@ curl -X POST http://localhost:8787/builds \
   -H 'content-type: application/json' \
   -d '{"platforms": ["windows"], "reason": "windows fix-check"}'
 
-# Windows WebGPU/Dawn lane, without depending on the service process env
+# Windows WebGPU/Dawn lane, using the repo-owned preset
 curl -X POST http://localhost:8787/builds \
   -H 'content-type: application/json' \
   -d '{
     "platforms": ["windows"],
     "reason": "windows webgpu dawn repeatability",
-    "platformEnv": {
-      "windows": {
-        "NG_WINDOWS_SOURCE_PRESET": "iangrunert-win-gigacage-skia-fixes",
-        "NG_WINDOWS_ENABLE_WEBGPU": "1"
-      }
-    }
+    "presets": { "windows": "webgpu-dawn" }
   }'
 ```
 
@@ -73,9 +69,17 @@ The service creates a build id (timestamp + random), forks
 `202 Accepted` with the build record. Status flips from `running` to
 `succeeded` / `failed` / `cancelled` when each child exits.
 
-`POST /builds` accepts `env` for all platform children and `platformEnv` for a
-specific platform. Values are validated as environment-variable-safe string,
-number, or boolean values and are persisted in the build request.
+`POST /builds` accepts `env` for all platform children, `platformEnv` for a
+specific platform, and `presets` keyed by platform. Presets expand from
+`config/platforms.json` first; `platformEnv` is then applied so one-off
+overrides stay possible. Values are validated as environment-variable-safe
+string, number, or boolean values and are persisted in the build request.
+Requested platforms are validated against `config/platforms.json`; empty
+platform stubs such as Linux and iOS are rejected until their scripts exist.
+
+Build records include per-platform `pid`, `startedAt`, service log path, and
+the expected S3 `artifactPrefix`. This keeps the HTTP service useful after the
+SSM bootstrap hands off to detached workers.
 
 ## Build pipeline (per platform)
 
@@ -147,10 +151,12 @@ or a marker-poll probe). Long-running xcodebuild/ninja sessions run
 - Canonical repeatable command:
 
   ```bash
-  NG_WINDOWS_SOURCE_PRESET=iangrunert-win-gigacage-skia-fixes \
-  NG_WINDOWS_ENABLE_WEBGPU=1 \
-  ./scripts/run-build.sh windows <build-id>
+  ./scripts/run-windows-webgpu-dawn.sh <build-id>
   ```
+- The Windows validation probe records the first WebGPU/Dawn milestone in
+  `validation-report.json.runtime`: `navigator.gpu`, `requestAdapter()`,
+  `requestDevice()`, and `device.queue`. This does not imply presentation,
+  canvas swapchain, or rendering.
 
 ### macOS (`i-092d7452a5deac519`, `eu-central-1`)
 
@@ -198,11 +204,10 @@ or a marker-poll probe). Long-running xcodebuild/ninja sessions run
 1. **Web UI**. Plain HTML served from the Node service, with a row per build,
    a platform selector, expand-to-view logs, and a download button that hits
    the S3 artifact directly. The API can already drive it.
-2. **Validation phase hardening**. After a build, actually run `MiniBrowser.exe` / the
-   macOS `MiniBrowser.app` with a probe HTML that reports `navigator.gpu`
-   state to a local HTTP listener, and attach the JSON result to the
-   artifacts. Windows now writes the probe and DLL-load JSON; the WebGPU page
-   callback still needs to report a real adapter/device result.
+2. **Validation phase hardening**. Windows now writes the probe and DLL-load
+   JSON and reports real adapter/device/queue state. The next Windows step is
+   canvas presentation once the Dawn swapchain path exists; macOS still needs
+   the equivalent `MiniBrowser.app` probe.
 3. **macOS green**. Currently blocked on `libwebrtc`
    `network_constants.h -Wconstant-conversion` under Xcode 16. Patch in
    flight (explicit `static_cast<uint16_t>` around the wrap-around

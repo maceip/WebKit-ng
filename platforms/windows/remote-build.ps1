@@ -377,11 +377,48 @@ $testHtml = @"
 <body><h1>ng-webkit validation probe</h1><pre id="out">running...</pre>
 <script>
 (async () => {
+  function toArray(value) {
+    try { return Array.from(value || []); } catch (e) { return []; }
+  }
+
+  function pickLimits(limits) {
+    if (!limits) return null;
+    const keys = [
+      'maxTextureDimension1D',
+      'maxTextureDimension2D',
+      'maxTextureArrayLayers',
+      'maxBindGroups',
+      'maxBindingsPerBindGroup',
+      'maxBufferSize',
+      'maxStorageBufferBindingSize',
+      'maxUniformBufferBindingSize'
+    ];
+    const out = {};
+    for (const key of keys) {
+      try {
+        if (limits[key] !== undefined) out[key] = limits[key];
+      } catch (e) { }
+    }
+    return out;
+  }
+
+  function errorString(e) {
+    return String(e && (e.stack || e.message) || e);
+  }
+
   const report = {
     userAgent: navigator.userAgent,
     gpuAvailable: !!navigator.gpu,
+    preferredCanvasFormat: navigator.gpu ? navigator.gpu.getPreferredCanvasFormat() : null,
+    wgslLanguageFeatures: navigator.gpu ? toArray(navigator.gpu.wgslLanguageFeatures) : [],
     adapter: null,
-    adapterError: null
+    adapterFeatures: [],
+    adapterLimits: null,
+    adapterError: null,
+    device: null,
+    deviceError: null,
+    queueAvailable: false,
+    smokePassed: false
   };
   if (navigator.gpu) {
     try {
@@ -389,10 +426,24 @@ $testHtml = @"
       if (a) {
         const info = (a.info || (a.requestAdapterInfo ? await a.requestAdapterInfo() : {}));
         report.adapter = { vendor: info.vendor, architecture: info.architecture, device: info.device, description: info.description };
+        report.adapterFeatures = toArray(a.features);
+        report.adapterLimits = pickLimits(a.limits);
+        try {
+          const device = await a.requestDevice();
+          report.device = {
+            features: toArray(device.features),
+            limits: pickLimits(device.limits)
+          };
+          report.queueAvailable = !!device.queue;
+          report.smokePassed = !!device.queue;
+          if (device.destroy) device.destroy();
+        } catch (e) {
+          report.deviceError = errorString(e);
+        }
       } else {
         report.adapterError = 'requestAdapter returned null';
       }
-    } catch (e) { report.adapterError = String(e); }
+    } catch (e) { report.adapterError = errorString(e); }
   }
   document.getElementById('out').textContent = JSON.stringify(report, null, 2);
   try {
