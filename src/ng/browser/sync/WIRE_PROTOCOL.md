@@ -39,10 +39,10 @@ LoopbackSyncRpcService::commandPath() == "/command"
 LoopbackSyncRpcService::wireContentType() == "application/octet-stream"
 ```
 
-## Next Layer
+## Wire Adapter
 
-Add a `ChromiumSyncWireAdapter` that depends on generated protobuf classes, not
-on Chromium runtime code:
+`ChromiumSyncWireAdapter` depends on generated protobuf classes, not on
+Chromium runtime code:
 
 ```text
 sync_pb::ClientToServerMessage
@@ -52,14 +52,15 @@ sync_pb::ClientToServerMessage
   -> sync_pb::ClientToServerResponse
 ```
 
-The adapter must be the only code in `src/ng/browser/sync` that includes
-generated Chromium sync protobuf headers. The server/client state machine must
-stay portable and testable without protobuf.
+The adapter is the only production code in `src/ng/browser/sync` that includes
+generated Chromium sync protobuf headers. The server/client state machine stays
+portable and testable without protobuf.
 
 ## Build Dependency
 
-This machine does not currently have `protoc` on `PATH`. Once protobuf codegen
-is available, generate from the preserved `.proto` corpus and add a small test
-that serializes a real `ClientToServerMessage`, sends it through the adapter,
-and deserializes `ClientToServerResponse`.
+`protoc` and `libprotobuf-dev` are required. CMake generates the preserved
+Chromium sync `.proto` corpus into the build directory and links it into
+`ng_chromium_sync_proto`.
 
+The wire test serializes a real `ClientToServerMessage`, sends it through the
+adapter, and deserializes `ClientToServerResponse`.
