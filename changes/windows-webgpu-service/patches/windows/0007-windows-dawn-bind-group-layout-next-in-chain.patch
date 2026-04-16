@@ -1,0 +1,58 @@
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 19:22:48.667303459 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 19:22:23.614334404 +0000
+@@ -274,12 +274,21 @@
+ 
+     auto backingEntries = WTF::map(descriptor.entries, [&](auto& entry) {
+         return WGPUBindGroupLayoutEntry {
++#if PLATFORM(WIN)
++            .nextInChain = nullptr,
++#endif
+             .binding = entry.binding,
+ #if !PLATFORM(WIN)
+             .metalBinding = { entry.binding, entry.binding, entry.binding },
+ #endif
+             .visibility = m_convertToBackingContext->convertShaderStageFlagsToBacking(entry.visibility),
++#if PLATFORM(WIN)
++            .bindingArraySize = 0,
++#endif
+             .buffer = {
++#if PLATFORM(WIN)
++                .nextInChain = nullptr,
++#endif
+                 .type = entry.buffer ? m_convertToBackingContext->convertToBacking(entry.buffer->type) : WGPUBufferBindingType_Undefined,
+                 .hasDynamicOffset = entry.buffer ? entry.buffer->hasDynamicOffset : false,
+                 .minBindingSize = entry.buffer ? entry.buffer->minBindingSize : 0,
+@@ -288,14 +297,23 @@
+ #endif
+             },
+             .sampler = {
++#if PLATFORM(WIN)
++                .nextInChain = nullptr,
++#endif
+                 .type = entry.sampler ? m_convertToBackingContext->convertToBacking(entry.sampler->type) : WGPUSamplerBindingType_Undefined,
+             },
+             .texture = {
++#if PLATFORM(WIN)
++                .nextInChain = nullptr,
++#endif
+                 .sampleType = entry.externalTexture ? static_cast<WGPUTextureSampleType>(WGPUTextureSampleType_ExternalTexture) : (entry.texture ? m_convertToBackingContext->convertToBacking(entry.texture->sampleType) : WGPUTextureSampleType_Undefined),
+                 .viewDimension = (!entry.externalTexture && entry.texture) ? m_convertToBackingContext->convertToBacking(entry.texture->viewDimension) : WGPUTextureViewDimension_Undefined,
+                 .multisampled = (!entry.externalTexture && entry.texture) ? entry.texture->multisampled : false,
+             },
+             .storageTexture = {
++#if PLATFORM(WIN)
++                .nextInChain = nullptr,
++#endif
+                 .access = entry.storageTexture ? m_convertToBackingContext->convertToBacking(entry.storageTexture->access) : WGPUStorageTextureAccess_Undefined,
+                 .format = entry.storageTexture ? m_convertToBackingContext->convertToBacking(entry.storageTexture->format) : WGPUTextureFormat_Undefined,
+                 .viewDimension = entry.storageTexture ? m_convertToBackingContext->convertToBacking(entry.storageTexture->viewDimension) : WGPUTextureViewDimension_Undefined,
+@@ -348,6 +366,9 @@
+ #endif
+     auto backingEntries = descriptor.entries.map([&](const auto& bindGroupEntry) {
+         return WGPUBindGroupEntry {
++#if PLATFORM(WIN)
++            .nextInChain = nullptr,
++#endif
+             .binding = bindGroupEntry.binding,
+             .buffer = std::holds_alternative<BufferBinding>(bindGroupEntry.resource) ? convertToBackingContext->convertToBacking(std::get<BufferBinding>(bindGroupEntry.resource).buffer) : nullptr,
+             .offset = std::holds_alternative<BufferBinding>(bindGroupEntry.resource) ? std::get<BufferBinding>(bindGroupEntry.resource).offset : 0,
