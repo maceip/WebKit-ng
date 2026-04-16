@@ -1529,7 +1529,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +#endif // PLATFORM(WIN)
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 11:51:32.862545691 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 18:36:23.940230898 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 18:58:44.830879762 +0000
 @@ -46,7 +46,9 @@
  #include "WebGPUOutOfMemoryError.h"
  #include "WebGPUPipelineLayoutDescriptor.h"
@@ -1691,7 +1691,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  RefPtr<BindGroupLayout> DeviceImpl::createBindGroupLayout(const BindGroupLayoutDescriptor& descriptor)
-@@ -217,7 +275,9 @@
+@@ -217,13 +275,17 @@
      auto backingEntries = WTF::map(descriptor.entries, [&](auto& entry) {
          return WGPUBindGroupLayoutEntry {
              .binding = entry.binding,
@@ -1701,7 +1701,15 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
              .visibility = m_convertToBackingContext->convertShaderStageFlagsToBacking(entry.visibility),
              .buffer = {
                  .type = entry.buffer ? m_convertToBackingContext->convertToBacking(entry.buffer->type) : WGPUBufferBindingType_Undefined,
-@@ -242,7 +302,10 @@
+                 .hasDynamicOffset = entry.buffer ? entry.buffer->hasDynamicOffset : false,
+                 .minBindingSize = entry.buffer ? entry.buffer->minBindingSize : 0,
++#if !PLATFORM(WIN)
+                 .bufferSizeForBinding = 0,
++#endif
+             },
+             .sampler = {
+                 .type = entry.sampler ? m_convertToBackingContext->convertToBacking(entry.sampler->type) : WGPUSamplerBindingType_Undefined,
+@@ -242,7 +304,10 @@
      });
  
      WGPUBindGroupLayoutDescriptor backingDescriptor {
@@ -1713,7 +1721,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .entryCount = backingEntries.size(),
          .entries = backingEntries.size() ? backingEntries.span().data() : nullptr,
      };
-@@ -262,7 +325,10 @@
+@@ -262,7 +327,10 @@
      }
  
      WGPUPipelineLayoutDescriptor backingDescriptor {
@@ -1725,7 +1733,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .bindGroupLayoutCount = descriptor.bindGroupLayouts ? backingBindGroupLayouts.size() : 0,
          .bindGroupLayouts = descriptor.bindGroupLayouts ? backingBindGroupLayouts.span().data() : nullptr,
      };
-@@ -290,7 +356,10 @@
+@@ -290,7 +358,10 @@
      });
  
      WGPUBindGroupDescriptor backingDescriptor {
@@ -1737,7 +1745,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .layout = convertToBackingContext->convertToBacking(protect(descriptor.layout).get()),
          .entryCount = backingEntries.size(),
          .entries = backingEntries.size() ? backingEntries.span().data() : nullptr,
-@@ -301,6 +370,9 @@
+@@ -301,6 +372,9 @@
  
  RefPtr<ShaderModule> DeviceImpl::createShaderModule(const ShaderModuleDescriptor& descriptor)
  {
@@ -1747,7 +1755,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto label = descriptor.label.utf8();
  
      auto entryPoints = descriptor.hints.map([](const auto& hint) {
-@@ -321,14 +393,45 @@
+@@ -321,14 +395,45 @@
  
      WGPUShaderModuleDescriptor backingDescriptor {
          .wgslDescriptor = descriptor.code,
@@ -1764,8 +1772,8 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +#endif
 +        );
 +#endif
-+}
-+
+ }
+ 
 +#if PLATFORM(WIN)
 +RefPtr<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineDescriptor& descriptor)
 +{
@@ -1783,8 +1791,8 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +{
 +    UNUSED_PARAM(descriptor);
 +    callback(nullptr, "Compute pipeline creation is not implemented for Windows Dawn yet"_s);
- }
- 
++}
++
 +void DeviceImpl::createRenderPipelineAsync(const RenderPipelineDescriptor& descriptor, CompletionHandler<void(RefPtr<RenderPipeline>&&, String&&)>&& callback)
 +{
 +    UNUSED_PARAM(descriptor);
@@ -1795,7 +1803,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  template <typename T>
  static auto convertToBacking(const ComputePipelineDescriptor& descriptor, ConvertToBackingContext& convertToBackingContext, T&& callback)
  {
-@@ -355,7 +458,7 @@
+@@ -355,7 +460,7 @@
      });
  
      WGPUComputePipelineDescriptor backingDescriptor {
@@ -1804,7 +1812,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .layout = descriptor.layout ? convertToBackingContext.convertToBacking(*protect(descriptor.layout)) : nullptr,
          .compute = WGPUProgrammableStageDescriptor {
              .module = convertToBackingContext.convertToBacking(protect(descriptor.compute.module).get()),
-@@ -520,7 +623,7 @@
+@@ -520,7 +625,7 @@
      };
  
      WGPURenderPipelineDescriptor backingDescriptor {
@@ -1813,7 +1821,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .layout = descriptor.layout ? convertToBackingContext.convertToBacking(*protect(descriptor.layout)) : nullptr,
          .vertex = {
              .module = convertToBackingContext.convertToBacking(protect(descriptor.vertex.module).get()),
-@@ -556,15 +659,66 @@
+@@ -556,15 +661,66 @@
      });
  }
  
@@ -1880,7 +1888,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      convertToBacking(descriptor, m_convertToBackingContext, [backing = m_backing.copyRef(), &convertToBackingContext = m_convertToBackingContext.get(), callback = WTF::move(callback)](const WGPUComputePipelineDescriptor& backingDescriptor) mutable {
          auto blockPtr = makeBlockPtr([convertToBackingContext = protect(convertToBackingContext), callback = WTF::move(callback)](WGPUCreatePipelineAsyncStatus status, WGPUComputePipeline pipeline, String&& message) mutable {
              if (status == WGPUCreatePipelineAsyncStatus_Success)
-@@ -574,14 +728,17 @@
+@@ -574,14 +730,17 @@
          });
          wgpuDeviceCreateComputePipelineAsync(backing.get(), &backingDescriptor, &createComputePipelineAsyncCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in createComputePipelineAsyncCallback().
      });
@@ -1898,7 +1906,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  
  void DeviceImpl::createRenderPipelineAsync(const RenderPipelineDescriptor& descriptor, CompletionHandler<void(RefPtr<RenderPipeline>&&, String&&)>&& callback)
  {
-@@ -595,13 +752,17 @@
+@@ -595,13 +754,17 @@
          wgpuDeviceCreateRenderPipelineAsync(backing.get(), &backingDescriptor, &createRenderPipelineAsyncCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in createRenderPipelineAsyncCallback().
      });
  }
@@ -1917,7 +1925,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      };
  
      return CommandEncoderImpl::create(adoptWebGPU(wgpuDeviceCreateCommandEncoder(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
-@@ -617,7 +778,10 @@
+@@ -617,7 +780,10 @@
      });
  
      WGPURenderBundleEncoderDescriptor backingDescriptor {
@@ -1929,7 +1937,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .colorFormatCount = backingColorFormats.size(),
          .colorFormats = backingColorFormats.size() ? backingColorFormats.span().data() : nullptr,
          .depthStencilFormat = descriptor.depthStencilFormat ? convertToBackingContext->convertToBacking(*descriptor.depthStencilFormat) : WGPUTextureFormat_Undefined,
-@@ -635,7 +799,10 @@
+@@ -635,7 +801,10 @@
      Ref convertToBackingContext = m_convertToBackingContext;
  
      WGPUQuerySetDescriptor backingDescriptor {
@@ -1941,7 +1949,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          .type = convertToBackingContext->convertToBacking(descriptor.type),
          .count = descriptor.count,
      };
-@@ -648,6 +815,7 @@
+@@ -648,6 +817,7 @@
      wgpuDevicePushErrorScope(m_backing.get(), protect(m_convertToBackingContext)->convertToBacking(errorFilter));
  }
  
@@ -1949,7 +1957,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  static void popErrorScopeCallback(WGPUErrorType type, const char* message, void* userdata)
  {
      auto block = reinterpret_cast<void(^)(WGPUErrorType, const char*)>(userdata);
-@@ -661,9 +829,61 @@
+@@ -661,9 +831,61 @@
      block(type, message);
      Block_release(block);
  }
@@ -2011,7 +2019,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto blockPtr = makeBlockPtr([callback = WTF::move(callback)](WGPUErrorType errorType, const char* message) mutable {
          std::optional<Error> error;
          bool succeeded = false;
-@@ -691,10 +911,14 @@
+@@ -691,10 +913,14 @@
          callback(succeeded, WTF::move(error));
      });
      wgpuDevicePopErrorScope(m_backing.get(), &popErrorScopeCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in popErrorScopeCallback().
@@ -2026,7 +2034,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto blockPtr = makeBlockPtr([callback = WTF::move(callback)](WGPUErrorType errorType, const char* message) mutable {
          std::optional<Error> error;
          bool hasUncapturedError = true;
-@@ -722,10 +946,14 @@
+@@ -722,10 +948,14 @@
          callback(hasUncapturedError, WTF::move(error));
      });
      wgpuDeviceSetUncapturedErrorCallback(m_backing.get(), &setUncapturedScopeCallback, Block_copy(blockPtr.get()));
@@ -2041,7 +2049,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      wgpuDeviceSetDeviceLostCallbackWithBlock(m_backing.get(), makeBlockPtr([callback = WTF::move(callback)](WGPUDeviceLostReason reason, const char*) mutable {
          switch (reason) {
          case WGPUDeviceLostReason_Undefined:
-@@ -737,16 +965,25 @@
+@@ -737,16 +967,25 @@
              return;
          }
      }).get());
