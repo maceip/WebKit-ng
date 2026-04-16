@@ -27,7 +27,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/Block.
 -#endif
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 11:51:32.857435164 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 12:33:26.748687195 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 12:56:29.773087738 +0000
 @@ -25,6 +25,7 @@
  
  #pragma once
@@ -36,6 +36,15 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  #include <WebGPU/WebGPU.h>
  #include <span>
  #include <wtf/Vector.h>
+@@ -40,7 +41,7 @@
+ typedef struct WGPUSwapChainDescriptor {
+     WGPUChainedStruct const* nextInChain;
+     char const* label;
+-    WGPUTextureUsageFlags usage;
++    WGPUTextureUsage usage;
+     WGPUTextureFormat format;
+     uint32_t width;
+     uint32_t height;
 @@ -77,6 +78,7 @@
  
  static constexpr auto WGPUTextureSampleType_ExternalTexture = static_cast<WGPUTextureSampleType>(WGPUTextureSampleType_Force32 - 1);
@@ -116,7 +125,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +}
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 11:51:32.865982496 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 11:27:02.480023401 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 12:56:29.774087543 +0000
 @@ -30,8 +30,11 @@
  
  #include "WebGPUConvertToBackingContext.h"
@@ -139,7 +148,21 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  #else
      WGPUAdapterProperties properties;
      wgpuAdapterGetProperties(adapter, &properties);
-@@ -59,56 +61,21 @@
+@@ -51,64 +53,34 @@
+ static Ref<SupportedFeatures> supportedFeatures(const Vector<WGPUFeatureName>& features)
+ {
+     Vector<String> result;
+-    for (auto feature : features)
++    for (auto feature : features) {
++#if PLATFORM(WIN)
++        result.append(DawnCompat::dawnFeatureName(feature));
++#else
+         result.append(wgpuAdapterFeatureName(feature));
++#endif
++    }
+ 
+     return SupportedFeatures::create(WTF::move(result));
+ }
  
  static Ref<SupportedFeatures> supportedFeatures(WGPUAdapter adapter)
  {
@@ -201,7 +224,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  #else
      WGPUSupportedLimits limits;
      auto result = wgpuAdapterGetLimits(adapter, &limits);
-@@ -167,10 +134,17 @@
+@@ -167,10 +139,17 @@
  
  WTF_MAKE_TZONE_ALLOCATED_IMPL(AdapterImpl);
  
@@ -220,7 +243,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  {
  }
  
-@@ -212,23 +186,57 @@
+@@ -212,23 +191,57 @@
      return true;
  }
  
