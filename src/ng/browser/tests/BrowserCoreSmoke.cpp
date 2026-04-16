@@ -1,6 +1,6 @@
 #include "extensions/ExtensionRegistry.h"
 #include "extensions/ExtensionRuntime.h"
-#include "sync/SyncLoopback.h"
+#include "sync/LoopbackSyncClient.h"
 #include "tabs/BrowserCommandController.h"
 #include "webauthn/WebAuthnController.h"
 
@@ -88,19 +88,22 @@ void exerciseWebAuthn()
 
 void exerciseSync()
 {
-    ng::SyncLoopbackStore store;
-    ng::SyncCommitRequest commit;
-    commit.clientId = "client-a";
-    commit.entities.push_back({ "prefs/homepage", ng::SyncEntityType::Preference, 0, { 1, 2, 3 } });
-    auto commitResponse = store.commit(commit);
-    assert(commitResponse);
+    ng::LoopbackSyncServer server;
+    ng::LoopbackSyncClient first("first");
+    ng::LoopbackSyncClient second("second");
 
-    ng::SyncGetUpdatesRequest updates;
-    updates.clientId = "client-b";
-    updates.sinceVersion = 0;
-    auto updateResponse = store.getUpdates(updates);
-    assert(updateResponse);
-    assert(updateResponse.value().entities.size() == 1);
+    first.trackDataType(ng::SyncDataType::Bookmarks);
+    second.trackDataType(ng::SyncDataType::Bookmarks);
+
+    first.upsertLocal(ng::SyncDataType::Bookmarks, "bookmark-a", "Example", "https://example.test");
+    assert(first.sync(server) == ng::SyncResult::Success);
+    assert(second.sync(server) == ng::SyncResult::Success);
+
+    const auto id = ng::LoopbackSyncServer::createId(ng::SyncDataType::Bookmarks, "bookmark-a");
+    auto synced = second.localRecord(id);
+    assert(synced);
+    assert(synced->name == "Example");
+    assert(synced->payload == "https://example.test");
 }
 
 } // namespace
@@ -113,4 +116,3 @@ int main()
     exerciseSync();
     return 0;
 }
-

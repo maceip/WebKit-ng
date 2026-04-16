@@ -6,7 +6,10 @@ add_library(ng_browser_core STATIC
     extensions/ExtensionManifest.cpp
     extensions/ExtensionRegistry.cpp
     extensions/ExtensionRuntime.cpp
-    sync/SyncLoopback.cpp
+    sync/LoopbackSyncClient.cpp
+    sync/LoopbackSyncRpc.cpp
+    sync/LoopbackSyncServer.cpp
+    sync/SyncTypes.cpp
     tabs/BrowserCommandController.cpp
     tabs/BrowserStateModel.cpp
     webauthn/WebAuthnController.cpp
@@ -31,3 +34,10 @@ add_executable(ng_browser_core_smoke
 
 target_link_libraries(ng_browser_core_smoke PRIVATE ng_browser_core)
 add_test(NAME ng_browser_core_smoke COMMAND ng_browser_core_smoke)
+
+add_executable(ng_loopback_sync_test
+    tests/LoopbackSyncTest.cpp
+)
+
+target_link_libraries(ng_loopback_sync_test PRIVATE ng_browser_core)
+add_test(NAME ng_loopback_sync_test COMMAND ng_loopback_sync_test)
