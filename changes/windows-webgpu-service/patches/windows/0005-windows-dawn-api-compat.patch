@@ -27,7 +27,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/Block.
 -#endif
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 11:51:32.857435164 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 12:56:29.773087738 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 17:10:41.690471201 +0000
 @@ -25,6 +25,7 @@
  
  #pragma once
@@ -53,7 +53,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  typedef struct WGPUExternalTextureBindingLayout {
  } WGPUExternalTextureBindingLayout;
  
-@@ -85,7 +87,33 @@
+@@ -85,7 +87,54 @@
      CVPixelBufferRef pixelBuffer;
      WGPUColorSpace colorSpace;
  } WGPUExternalTextureDescriptor;
@@ -83,11 +83,32 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +static inline void wgpuSurfaceReference(WGPUSurface a) { wgpuSurfaceAddRef(a); }
 +static inline void wgpuTextureReference(WGPUTexture a) { wgpuTextureAddRef(a); }
 +static inline void wgpuTextureViewReference(WGPUTextureView a) { wgpuTextureViewAddRef(a); }
++static inline WGPUBool wgpuAdapterIsValid(WGPUAdapter a) { return !!a; }
++static inline WGPUBool wgpuBindGroupIsValid(WGPUBindGroup a) { return !!a; }
++static inline WGPUBool wgpuBindGroupLayoutIsValid(WGPUBindGroupLayout a) { return !!a; }
++static inline WGPUBool wgpuBufferIsValid(WGPUBuffer a) { return !!a; }
++static inline WGPUBool wgpuCommandBufferIsValid(WGPUCommandBuffer a) { return !!a; }
++static inline WGPUBool wgpuCommandEncoderIsValid(WGPUCommandEncoder a) { return !!a; }
++static inline WGPUBool wgpuComputePassEncoderIsValid(WGPUComputePassEncoder a) { return !!a; }
++static inline WGPUBool wgpuComputePipelineIsValid(WGPUComputePipeline a) { return !!a; }
++static inline WGPUBool wgpuDeviceIsValid(WGPUDevice a) { return !!a; }
++static inline WGPUBool wgpuPipelineLayoutIsValid(WGPUPipelineLayout a) { return !!a; }
++static inline WGPUBool wgpuPresentationContextIsValid(WGPUSurface a) { return !!a; }
++static inline WGPUBool wgpuQuerySetIsValid(WGPUQuerySet a) { return !!a; }
++static inline WGPUBool wgpuQueueIsValid(WGPUQueue a) { return !!a; }
++static inline WGPUBool wgpuRenderBundleIsValid(WGPURenderBundle a) { return !!a; }
++static inline WGPUBool wgpuRenderBundleEncoderIsValid(WGPURenderBundleEncoder a) { return !!a; }
++static inline WGPUBool wgpuRenderPassEncoderIsValid(WGPURenderPassEncoder a) { return !!a; }
++static inline WGPUBool wgpuRenderPipelineIsValid(WGPURenderPipeline a) { return !!a; }
++static inline WGPUBool wgpuSamplerIsValid(WGPUSampler a) { return !!a; }
++static inline WGPUBool wgpuShaderModuleIsValid(WGPUShaderModule a) { return !!a; }
++static inline WGPUBool wgpuTextureIsValid(WGPUTexture a) { return !!a; }
++static inline WGPUBool wgpuTextureViewIsValid(WGPUTextureView a) { return !!a; }
 +#else
  static inline void wgpuAdapterReference(WGPUAdapter) { }
  static inline void wgpuBindGroupReference(WGPUBindGroup) { }
  static inline void wgpuBindGroupLayoutReference(WGPUBindGroupLayout) { }
-@@ -108,6 +136,7 @@
+@@ -108,6 +157,7 @@
  static inline void wgpuSurfaceReference(WGPUSurface) { }
  static inline void wgpuTextureReference(WGPUTexture) { }
  static inline void wgpuTextureViewReference(WGPUTextureView) { }
@@ -95,7 +116,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  static inline void wgpuExternalTextureReference(WGPUExternalTexture) { }
  static inline void wgpuExternalTextureRelease(WGPUExternalTexture) { }
  static inline void wgpuXRBindingReference(WGPUXRBinding) { }
-@@ -175,3 +204,27 @@
+@@ -175,3 +225,27 @@
      }
      wgpuRenderBundleEncoderSetBindGroup(encoder, groupIndex, group, copiedOffsets.size(), copiedOffsets.span().data());
  }
@@ -1028,19 +1049,19 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 11:51:32.007705221 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 16:22:12.516648653 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 17:10:24.309871982 +0000
 @@ -223,9 +223,17 @@
      case FeatureName::Float32Filterable:
          return WGPUFeatureName_Float32Filterable;
      case FeatureName::Float16Renderable:
 +#if PLATFORM(WIN)
-+        return WGPUFeatureName_Undefined;
++        return static_cast<WGPUFeatureName>(0);
 +#else
          return WGPUFeatureName_Float16Renderable;
 +#endif
      case FeatureName::Float32Renderable:
 +#if PLATFORM(WIN)
-+        return WGPUFeatureName_Undefined;
++        return static_cast<WGPUFeatureName>(0);
 +#else
          return WGPUFeatureName_Float32Renderable;
 +#endif
