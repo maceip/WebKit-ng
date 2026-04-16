@@ -51,12 +51,20 @@ generation.
 
 ## Layout
 
+- `src/ng/browser`: portable browser product layer for tabs, extensions,
+  WebAuthn/passkeys, sync, and platform adapter contracts.
+- `changes/*`: repo-owned WebKit source changes applied to downstream checkouts.
 - `patches/common`: patches applied to every source tree when applicable.
 - `patches/android`: Android/WPE Android specific patches.
 - `patches/windows`: Windows specific patches.
 - `platforms/*`: setup and build entry points per platform.
 - `scripts`: shared patch, artifact, and build helpers.
 - `service`: local HTTP API for starting, restarting, checkpointing, and tracking builds.
+
+The quality bar for security-critical browser work is recorded in
+[`constitution.md`](./constitution.md). Keep portable policy in `src/ng/browser`;
+put WebKit integration patches in `changes/*`; keep platform build mechanics in
+`platforms/*` and `patches/*`.
 
 Patch files should be standard `git format-patch` or `git diff` patches with `.patch`
 or `.diff` suffixes. The build scripts apply `patches/common` first, then the platform
