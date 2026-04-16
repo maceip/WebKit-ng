@@ -146,7 +146,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +}
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 11:51:32.865982496 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 12:56:29.774087543 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 17:39:28.884548742 +0000
 @@ -30,8 +30,11 @@
  
  #include "WebGPUConvertToBackingContext.h"
@@ -329,6 +329,18 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  #else
      auto label = descriptor.label.utf8();
  
+@@ -370,7 +383,11 @@
+ 
+ bool AdapterImpl::xrCompatible()
+ {
++#if PLATFORM(WIN)
++    return false;
++#else
+     return wgpuAdapterXRCompatible(m_backing.get());
++#endif
+ }
+ 
+ } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h	2026-04-16 11:51:32.007705221 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h	2026-04-16 11:27:02.480084652 +0000
@@ -1049,7 +1061,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 11:51:32.007705221 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 17:10:24.309871982 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 17:33:03.258999517 +0000
 @@ -223,9 +223,17 @@
      case FeatureName::Float32Filterable:
          return WGPUFeatureName_Float32Filterable;
@@ -1068,6 +1080,18 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      case FeatureName::Float32Blendable:
          return WGPUFeatureName_Float32Blendable;
      case FeatureName::ClipDistances:
+@@ -729,7 +737,11 @@
+     case VertexFormat::Sint32x4:
+         return WGPUVertexFormat_Sint32x4;
+     case VertexFormat::Unorm1010102:
++#if PLATFORM(WIN)
++        return WGPUVertexFormat_Unorm10_10_10_2;
++#else
+         return WGPUVertexFormat_Unorm1010102;
++#endif
+     case VertexFormat::Unorm8x4Bgra:
+         return WGPUVertexFormat_Unorm8x4Bgra;
+     }
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:51:32.854912098 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:27:02.480552679 +0000
@@ -2326,6 +2350,99 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  } // namespace WebCore::WebGPU
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.cpp	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.cpp	2026-04-16 17:39:48.303749271 +0000
+@@ -24,19 +24,19 @@
+  */
+ 
+ #include "config.h"
+-#include "WebGPUPresentationContextImpl.h"
+ 
+ #if HAVE(WEBGPU_IMPLEMENTATION)
+ 
+-#include "NativeImage.h"
++#include "WebGPUPresentationContextImpl.h"
++
+ #include "WebGPUCanvasConfiguration.h"
+ #include "WebGPUConvertToBackingContext.h"
++#if !PLATFORM(WIN)
++#include "NativeImage.h"
+ #include "WebGPUDeviceImpl.h"
+ #include "WebGPUTextureDescriptor.h"
+ #include "WebGPUTextureImpl.h"
+ #include <WebGPU/WebGPUExt.h>
+-
+-#if PLATFORM(COCOA)
+ #include <wtf/MachSendRight.h>
+ #endif
+ 
+@@ -58,6 +58,43 @@
+     m_height = height;
+ }
+ 
++#if PLATFORM(WIN)
++
++bool PresentationContextImpl::configure(const CanvasConfiguration& canvasConfiguration)
++{
++    m_swapChain = nullptr;
++    m_currentTexture = nullptr;
++    m_format = canvasConfiguration.format;
++    return false;
++}
++
++void PresentationContextImpl::unconfigure()
++{
++    m_swapChain = nullptr;
++    m_currentTexture = nullptr;
++    m_format = TextureFormat::Bgra8unorm;
++    m_width = 0;
++    m_height = 0;
++}
++
++RefPtr<Texture> PresentationContextImpl::getCurrentTexture(uint32_t)
++{
++    return nullptr;
++}
++
++void PresentationContextImpl::present(uint32_t, bool)
++{
++    m_currentTexture = nullptr;
++}
++
++RefPtr<WebCore::NativeImage> PresentationContextImpl::getMetalTextureAsNativeImage(uint32_t, bool& isIOSurfaceSupportedFormat)
++{
++    isIOSurfaceSupportedFormat = false;
++    return nullptr;
++}
++
++#else
++
+ static WGPUToneMappingMode NODELETE convertToToneMappingMode(WebCore::WebGPU::CanvasToneMappingMode toneMappingMode)
+ {
+     switch (toneMappingMode) {
+@@ -175,6 +212,8 @@
+     return nullptr;
+ }
+ 
++#endif
++
+ } // namespace WebCore::WebGPU
+ 
+ #endif // HAVE(WEBGPU_IMPLEMENTATION)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.h	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPresentationContextImpl.h	2026-04-16 17:34:35.656919836 +0000
+@@ -31,7 +31,9 @@
+ #include "WebGPUPresentationContext.h"
+ #include "WebGPUPtr.h"
+ #include "WebGPUTextureFormat.h"
++#if !PLATFORM(WIN)
+ #include <IOSurface/IOSurfaceRef.h>
++#endif
+ #include <WebGPU/WebGPU.h>
+ #include <wtf/TZoneMalloc.h>
+ 
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp	2026-04-16 11:51:32.009600408 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp	2026-04-16 11:27:02.480964986 +0000
@@ -3056,6 +3173,150 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  } // namespace WebCore::WebGPU
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.cpp	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.cpp	2026-04-16 17:38:59.423312987 +0000
+@@ -26,7 +26,7 @@
+ #include "config.h"
+ #include "WebGPUXRBindingImpl.h"
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUConvertToBackingContext.h"
+ #include "WebGPUDevice.h"
+@@ -75,4 +75,4 @@
+ 
+ } // namespace WebCore::WebGPU
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.h	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRBindingImpl.h	2026-04-16 17:38:59.423312987 +0000
+@@ -25,7 +25,7 @@
+ 
+ #pragma once
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUPtr.h"
+ #include "WebGPUXRBinding.h"
+@@ -85,4 +85,4 @@
+     static bool isType(const WebCore::WebGPU::XRBinding& xrBinding) { return xrBinding.isXRBindingImpl(); }
+ SPECIALIZE_TYPE_TRAITS_END()
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.cpp	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.cpp	2026-04-16 17:38:59.423312987 +0000
+@@ -26,7 +26,7 @@
+ #include "config.h"
+ #include "WebGPUXRProjectionLayerImpl.h"
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "PlatformXR.h"
+ #include "WebGPUConvertToBackingContext.h"
+@@ -121,4 +121,4 @@
+ 
+ } // namespace WebCore::WebGPU
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.h	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.h	2026-04-16 17:38:59.423312987 +0000
+@@ -25,7 +25,7 @@
+ 
+ #pragma once
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUPtr.h"
+ #include "WebGPUXRProjectionLayer.h"
+@@ -91,4 +91,4 @@
+     static bool isType(const WebCore::WebGPU::XRProjectionLayer& xrProjectionLayer) { return xrProjectionLayer.isXRProjectionLayerImpl(); }
+ SPECIALIZE_TYPE_TRAITS_END()
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.cpp	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.cpp	2026-04-16 17:38:59.424312792 +0000
+@@ -26,7 +26,7 @@
+ #include "config.h"
+ #include "WebGPUXRSubImageImpl.h"
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUConvertToBackingContext.h"
+ #include "WebGPUDevice.h"
+@@ -279,4 +279,4 @@
+ 
+ } // namespace WebCore::WebGPU
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.h	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.h	2026-04-16 17:38:59.423312987 +0000
+@@ -25,7 +25,7 @@
+ 
+ #pragma once
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUPtr.h"
+ #include "WebGPUXRSubImage.h"
+@@ -72,4 +72,4 @@
+     static bool isType(const WebCore::WebGPU::XRSubImage& xrSubImage) { return xrSubImage.isXRSubImageImpl(); }
+ SPECIALIZE_TYPE_TRAITS_END()
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.cpp	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.cpp	2026-04-16 17:38:59.424312792 +0000
+@@ -26,7 +26,7 @@
+ #include "config.h"
+ #include "WebGPUXRViewImpl.h"
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUConvertToBackingContext.h"
+ #include "WebGPUDevice.h"
+@@ -45,4 +45,4 @@
+ 
+ } // namespace WebCore::WebGPU
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.h	2026-04-16 11:51:32.011600018 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUXRViewImpl.h	2026-04-16 17:38:59.424312792 +0000
+@@ -25,7 +25,7 @@
+ 
+ #pragma once
+ 
+-#if HAVE(WEBGPU_IMPLEMENTATION)
++#if HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
+ 
+ #include "WebGPUPtr.h"
+ #include "WebGPUXRView.h"
+@@ -80,4 +80,4 @@
+     static bool isType(const WebCore::WebGPU::XRView& xrView) { return xrView.isXRViewImpl(); }
+ SPECIALIZE_TYPE_TRAITS_END()
+ 
+-#endif // HAVE(WEBGPU_IMPLEMENTATION)
++#endif // HAVE(WEBGPU_IMPLEMENTATION) && !PLATFORM(WIN)
 diff -ruN '--exclude=.git' a/Source/WebCore/Sources.txt b/Source/WebCore/Sources.txt
 --- a/Source/WebCore/Sources.txt	2026-04-16 11:51:32.862634162 +0000
 +++ b/Source/WebCore/Sources.txt	2026-04-16 11:27:02.481555625 +0000
