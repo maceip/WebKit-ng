@@ -1,5 +1,5 @@
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/Block.h b/Source/WebCore/Modules/WebGPU/Implementation/Block.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/Block.h	2026-04-16 11:00:17.481774600 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/Block.h b/Source/WebCore/Modules/WebGPU/Implementation/Block.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/Block.h	2026-04-16 11:51:32.862435929 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/Block.h	1970-01-01 00:00:00.000000000 +0000
 @@ -1,23 +0,0 @@
 -#pragma once
@@ -25,9 +25,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/Block.h b/Source/WebCor
 -#ifdef __cplusplus
 -}
 -#endif
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 11:00:17.474884378 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 10:54:48.705161987 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 11:51:32.857435164 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h	2026-04-16 11:51:10.420822246 +0000
 @@ -25,6 +25,7 @@
  
  #pragma once
@@ -76,9 +76,37 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/So
  static inline void wgpuExternalTextureReference(WGPUExternalTexture) { }
  static inline void wgpuExternalTextureRelease(WGPUExternalTexture) { }
  static inline void wgpuXRBindingReference(WGPUXRBinding) { }
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 11:00:17.486244999 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 10:56:03.135605199 +0000
+@@ -175,3 +202,27 @@
+     }
+     wgpuRenderBundleEncoderSetBindGroup(encoder, groupIndex, group, copiedOffsets.size(), copiedOffsets.span().data());
+ }
++
++template<typename Offsets>
++static inline void wgpuRenderPassEncoderSetBindGroupWithDynamicOffsets(WGPURenderPassEncoder encoder, uint32_t groupIndex, WGPUBindGroup group, Offsets&& offsets)
++{
++    Vector<uint32_t> copiedOffsets;
++    if (offsets) {
++        copiedOffsets.reserveInitialCapacity(offsets->size());
++        for (auto offset : *offsets)
++            copiedOffsets.append(offset);
++    }
++    wgpuRenderPassEncoderSetBindGroup(encoder, groupIndex, group, copiedOffsets.size(), copiedOffsets.span().data());
++}
++
++template<typename Offsets>
++static inline void wgpuComputePassEncoderSetBindGroupWithDynamicOffsets(WGPUComputePassEncoder encoder, uint32_t groupIndex, WGPUBindGroup group, Offsets&& offsets)
++{
++    Vector<uint32_t> copiedOffsets;
++    if (offsets) {
++        copiedOffsets.reserveInitialCapacity(offsets->size());
++        for (auto offset : *offsets)
++            copiedOffsets.append(offset);
++    }
++    wgpuComputePassEncoderSetBindGroup(encoder, groupIndex, group, copiedOffsets.size(), copiedOffsets.span().data());
++}
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 11:51:32.865982496 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp	2026-04-16 11:27:02.480023401 +0000
 @@ -30,8 +30,11 @@
  
  #include "WebGPUConvertToBackingContext.h"
@@ -247,9 +275,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.cpp b
  #else
      auto label = descriptor.label.utf8();
  
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h	2026-04-16 11:00:16.365101327 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h	2026-04-16 10:55:11.704665797 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h	2026-04-16 11:27:02.480084652 +0000
 @@ -31,6 +31,7 @@
  #include "WebGPUPtr.h"
  #include <WebGPU/WebGPU.h>
@@ -301,9 +329,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUAdapterImpl.h b/S
  };
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp	2026-04-16 11:00:16.365101327 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp	2026-04-16 10:58:07.575963069 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp	2026-04-16 11:27:02.480131493 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -330,9 +358,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupImpl.cpp
  }
  
  bool BindGroupImpl::updateExternalTextures(ExternalTexture& externalTexture)
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp	2026-04-16 11:00:16.365101327 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp	2026-04-16 10:58:07.575572643 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutImpl.cpp	2026-04-16 11:27:02.480177733 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -359,9 +387,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBindGroupLayoutIm
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp	2026-04-16 11:00:16.365101327 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp	2026-04-16 10:59:19.142286769 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp	2026-04-16 11:27:02.480223244 +0000
 @@ -24,22 +24,36 @@
   */
  
@@ -468,9 +496,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.cpp b/
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h	2026-04-16 11:00:16.365101327 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h	2026-04-16 10:59:01.195795803 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h	2026-04-16 11:27:02.480273275 +0000
 @@ -31,6 +31,7 @@
  #include "WebGPUPtr.h"
  #include <WebGPU/WebGPU.h>
@@ -522,9 +550,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUBufferImpl.h b/So
  };
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp	2026-04-16 11:00:16.366101132 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp	2026-04-16 10:58:07.576977995 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl.cpp	2026-04-16 11:27:02.480319376 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -551,9 +579,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandBufferImpl
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp	2026-04-16 11:00:16.366101132 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp	2026-04-16 10:58:07.579577695 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp	2026-04-16 11:27:02.480365606 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -614,9 +642,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImp
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp	2026-04-16 11:00:16.366101132 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp	2026-04-16 10:58:07.577570304 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp	2026-04-16 11:51:10.421822051 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -626,6 +654,15 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncode
  #include "WebGPUComputePassEncoderImpl.h"
  
  #if HAVE(WEBGPU_IMPLEMENTATION)
+@@ -71,7 +73,7 @@
+ void ComputePassEncoderImpl::setBindGroup(Index32 index, const BindGroup* bindGroup,
+     std::optional<Vector<BufferDynamicOffset>>&& offsets)
+ {
+-    wgpuComputePassEncoderSetBindGroup(m_backing.get(), index, bindGroup ? m_convertToBackingContext->convertToBacking(*bindGroup) : nullptr, WTF::move(offsets));
++    wgpuComputePassEncoderSetBindGroupWithDynamicOffsets(m_backing.get(), index, bindGroup ? m_convertToBackingContext->convertToBacking(*bindGroup) : nullptr, WTF::move(offsets));
+ }
+ 
+ void ComputePassEncoderImpl::setBindGroup(Index32, const BindGroup*, std::span<const uint32_t>, Size64, Size32)
 @@ -81,7 +83,15 @@
  
  void ComputePassEncoderImpl::pushDebugGroup(String&& groupLabel)
@@ -674,9 +711,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncode
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp	2026-04-16 11:00:16.366101132 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp	2026-04-16 10:58:07.575159157 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp	2026-04-16 11:27:02.480478698 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -703,9 +740,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePipelineIm
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:00:17.471396309 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 10:56:36.871009594 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:51:32.854912098 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:27:02.480552679 +0000
 @@ -34,7 +34,9 @@
  #include "WebGPUImpl.h"
  #include "WebGPUPtr.h"
@@ -736,9 +773,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/
  
      if (!&wgpuCreateInstance)
          return nullptr;
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp	1970-01-01 00:00:00.000000000 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp	2026-04-16 10:55:28.927296130 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp	2026-04-16 11:27:02.480604360 +0000
 @@ -0,0 +1,278 @@
 +/*
 + * Copyright (C) 2026 Apple Inc. All rights reserved.
@@ -1018,9 +1055,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.cpp b/
 +} // namespace WebCore::WebGPU::DawnCompat
 +
 +#endif // PLATFORM(WIN)
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h	1970-01-01 00:00:00.000000000 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h	2026-04-16 10:55:28.927296130 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h	2026-04-16 11:27:02.480666131 +0000
 @@ -0,0 +1,91 @@
 +/*
 + * Copyright (C) 2026 Apple Inc. All rights reserved.
@@ -1113,9 +1150,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h b/So
 +} // namespace WebCore::WebGPU::DawnCompat
 +
 +#endif // PLATFORM(WIN)
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 11:00:17.481865031 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 10:59:12.176648575 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 11:51:32.862545691 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 11:27:02.480714212 +0000
 @@ -61,15 +61,33 @@
  #include "WebGPUTextureImpl.h"
  #include "WebGPUTextureViewImpl.h"
@@ -1571,9 +1608,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/
  }
  
  Ref<CommandEncoder> DeviceImpl::invalidCommandEncoder()
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h	2026-04-16 11:00:17.481939562 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h	2026-04-16 10:55:39.039317712 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h	2026-04-16 11:51:32.862634162 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h	2026-04-16 11:27:02.480801613 +0000
 @@ -33,8 +33,13 @@
  #include <WebCore/MediaPlayerIdentifier.h>
  #include <WebGPU/WebGPU.h>
@@ -1632,9 +1669,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.h b/So
  };
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:00:17.471476020 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:00:03.971524161 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:51:32.854986469 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:27:02.480855604 +0000
 @@ -33,12 +33,18 @@
  #include "WebGPUDowncastConvertToBackingContext.h"
  #include "WebGPUPresentationContextDescriptor.h"
@@ -1730,9 +1767,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source
  }
  
  RefPtr<CompositorIntegration> GPUImpl::createCompositorIntegration()
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp	2026-04-16 11:00:16.367100936 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp	2026-04-16 10:58:07.574758891 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp	2026-04-16 11:51:32.008600603 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp	2026-04-16 11:27:02.480917045 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -1759,9 +1796,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImp
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp	2026-04-16 11:00:16.367100936 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp	2026-04-16 10:58:07.573999739 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp	2026-04-16 11:27:02.480964986 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -1788,9 +1825,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQuerySetImpl.cpp 
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 10:59:25.304082139 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 11:27:02.481012336 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -1895,9 +1932,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp b/S
  }
  
  RefPtr<WebCore::NativeImage> QueueImpl::getNativeImage(WebCore::VideoFrame&)
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h	2026-04-16 10:58:27.404399480 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h	2026-04-16 11:27:02.481063997 +0000
 @@ -31,6 +31,7 @@
  #include "WebGPUQueue.h"
  #include <WebGPU/WebGPU.h>
@@ -1949,9 +1986,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.h b/Sou
  };
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp	2026-04-16 10:58:07.581259811 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncoderImpl.cpp	2026-04-16 11:51:10.421822051 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -1961,7 +1998,15 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncod
  #include "WebGPURenderBundleEncoderImpl.h"
  
  #if HAVE(WEBGPU_IMPLEMENTATION)
-@@ -104,7 +106,15 @@
+@@ -90,7 +92,6 @@
+ void RenderBundleEncoderImpl::setBindGroup(Index32 index, const BindGroup* bindGroup,
+     std::optional<Vector<BufferDynamicOffset>>&& dynamicOffsets)
+ {
+-    auto backingOffsets = valueOrDefault(dynamicOffsets);
+     wgpuRenderBundleEncoderSetBindGroupWithDynamicOffsets(m_backing.get(), index, bindGroup ? m_convertToBackingContext->convertToBacking(*bindGroup) : nullptr, WTF::move(dynamicOffsets));
+ }
+ 
+@@ -104,7 +105,15 @@
  
  void RenderBundleEncoderImpl::pushDebugGroup(String&& groupLabel)
  {
@@ -1978,7 +2023,7 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncod
  }
  
  void RenderBundleEncoderImpl::popDebugGroup()
-@@ -114,7 +124,15 @@
+@@ -114,23 +123,46 @@
  
  void RenderBundleEncoderImpl::insertDebugMarker(String&& markerLabel)
  {
@@ -1995,7 +2040,22 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncod
  }
  
  RefPtr<RenderBundle> RenderBundleEncoderImpl::finish(const RenderBundleDescriptor& descriptor)
-@@ -130,7 +148,15 @@
+ {
+     auto label = descriptor.label.utf8();
+ 
++#if PLATFORM(WIN)
++    WGPURenderBundleDescriptor backingDescriptor {
++        .nextInChain = nullptr,
++        .label = DawnCompat::toDawnStringView(label),
++    };
++#else
+     WGPURenderBundleDescriptor backingDescriptor {
+         .label = label.data(),
+     };
++#endif
+ 
+     return RenderBundleImpl::create(adoptWebGPU(wgpuRenderBundleEncoderFinish(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
+ }
  
  void RenderBundleEncoderImpl::setLabelInternal(const String& label)
  {
@@ -2012,9 +2072,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleEncod
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp	2026-04-16 10:58:07.574363474 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp	2026-04-16 11:51:32.009600408 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.cpp	2026-04-16 11:27:02.481170679 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2041,9 +2101,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderBundleImpl.
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp	2026-04-16 10:58:07.580454999 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoderImpl.cpp	2026-04-16 11:51:10.420822246 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2053,6 +2113,15 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoder
  #include "WebGPURenderPassEncoderImpl.h"
  
  #if HAVE(WEBGPU_IMPLEMENTATION)
+@@ -91,7 +93,7 @@
+ void RenderPassEncoderImpl::setBindGroup(Index32 index, const BindGroup* bindGroup,
+     std::optional<Vector<BufferDynamicOffset>>&& dynamicOffsets)
+ {
+-    wgpuRenderPassEncoderSetBindGroup(m_backing.get(), index, bindGroup ? m_convertToBackingContext->convertToBacking(*bindGroup) : nullptr, WTF::move(dynamicOffsets));
++    wgpuRenderPassEncoderSetBindGroupWithDynamicOffsets(m_backing.get(), index, bindGroup ? m_convertToBackingContext->convertToBacking(*bindGroup) : nullptr, WTF::move(dynamicOffsets));
+ }
+ 
+ void RenderPassEncoderImpl::setBindGroup(Index32, const BindGroup*, std::span<const uint32_t>, Size64, Size32)
 @@ -101,7 +103,15 @@
  
  void RenderPassEncoderImpl::pushDebugGroup(String&& groupLabel)
@@ -2104,9 +2173,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPassEncoder
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp	2026-04-16 10:58:07.572824441 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImpl.cpp	2026-04-16 11:27:02.481274080 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2133,9 +2202,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPURenderPipelineImp
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp	2026-04-16 10:58:07.571338318 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp	2026-04-16 11:27:02.481324391 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2162,9 +2231,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp b
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp	2026-04-16 11:00:16.368100741 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp	2026-04-16 10:59:39.721264617 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp	2026-04-16 11:27:02.481373662 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2279,9 +2348,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h	2026-04-16 11:00:16.369100545 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h	2026-04-16 10:59:05.685917791 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.h	2026-04-16 11:27:02.481428253 +0000
 @@ -30,6 +30,7 @@
  #include "WebGPUPtr.h"
  #include "WebGPUShaderModule.h"
@@ -2333,9 +2402,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.
  };
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp	2026-04-16 11:00:16.369100545 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp	2026-04-16 10:58:07.570830650 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp	2026-04-16 11:27:02.481478433 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2362,9 +2431,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp b
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp
---- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp	2026-04-16 11:00:16.369100545 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp	2026-04-16 10:58:07.572377304 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp	2026-04-16 11:51:32.010600213 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp	2026-04-16 11:27:02.481555625 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2391,9 +2460,9 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUTextureViewImpl.c
  }
  
  } // namespace WebCore::WebGPU
-diff -ruN a/Source/WebCore/Sources.txt b/Source/WebCore/Sources.txt
---- a/Source/WebCore/Sources.txt	2026-04-16 11:00:17.481939562 +0000
-+++ b/Source/WebCore/Sources.txt	2026-04-16 10:59:55.257227803 +0000
+diff -ruN '--exclude=.git' a/Source/WebCore/Sources.txt b/Source/WebCore/Sources.txt
+--- a/Source/WebCore/Sources.txt	2026-04-16 11:51:32.862634162 +0000
++++ b/Source/WebCore/Sources.txt	2026-04-16 11:27:02.481555625 +0000
 @@ -68,6 +68,7 @@
  Modules/WebGPU/Implementation/WebGPUComputePipelineImpl.cpp
  Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp
