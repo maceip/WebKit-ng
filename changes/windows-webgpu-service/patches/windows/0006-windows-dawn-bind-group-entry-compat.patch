@@ -1,0 +1,26 @@
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+@@ -343,7 +343,9 @@
+     auto label = descriptor.label.utf8();
+ 
+     Ref convertToBackingContext = m_convertToBackingContext;
++#if !PLATFORM(WIN)
+     SegmentedVector<WGPUExternalTexture, 1> chainedEntries;
++#endif
+     auto backingEntries = descriptor.entries.map([&](const auto& bindGroupEntry) {
+         return WGPUBindGroupEntry {
+             .binding = bindGroupEntry.binding,
+@@ -351,9 +353,13 @@
+             .offset = std::holds_alternative<BufferBinding>(bindGroupEntry.resource) ? std::get<BufferBinding>(bindGroupEntry.resource).offset : 0,
+             .size = std::holds_alternative<BufferBinding>(bindGroupEntry.resource) ? std::get<BufferBinding>(bindGroupEntry.resource).size.value_or(WGPU_WHOLE_SIZE) : 0,
+             .sampler = std::holds_alternative<std::reference_wrapper<Sampler>>(bindGroupEntry.resource) ? convertToBackingContext->convertToBacking(std::get<std::reference_wrapper<Sampler>>(bindGroupEntry.resource).get()) : nullptr,
++#if !PLATFORM(WIN)
+             .texture = std::holds_alternative<std::reference_wrapper<Texture>>(bindGroupEntry.resource) ? convertToBackingContext->convertToBacking(std::get<std::reference_wrapper<Texture>>(bindGroupEntry.resource).get()) : nullptr,
++#endif
+             .textureView = std::holds_alternative<std::reference_wrapper<TextureView>>(bindGroupEntry.resource) ? convertToBackingContext->convertToBacking(std::get<std::reference_wrapper<TextureView>>(bindGroupEntry.resource).get()) : nullptr,
++#if !PLATFORM(WIN)
+             .externalTexture = std::holds_alternative<std::reference_wrapper<ExternalTexture>>(bindGroupEntry.resource) ? convertToBackingContext->convertToBacking(std::get<std::reference_wrapper<ExternalTexture>>(bindGroupEntry.resource).get()) : nullptr,
++#endif
+         };
+     });
+ 
