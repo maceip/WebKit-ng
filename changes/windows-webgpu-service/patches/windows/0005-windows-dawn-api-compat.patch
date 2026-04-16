@@ -2067,7 +2067,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp	2026-04-16 11:51:32.008600603 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp	2026-04-16 15:34:54.591968037 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp	2026-04-16 16:47:03.337947493 +0000
 @@ -41,7 +41,9 @@
  #include "WebGPUExternalTextureImpl.h"
  #include "WebGPUImpl.h"
@@ -2078,7 +2078,20 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  #include "WebGPUQuerySetImpl.h"
  #include "WebGPUQueueImpl.h"
  #include "WebGPURenderBundleEncoderImpl.h"
-@@ -124,7 +126,12 @@
+@@ -52,10 +54,12 @@
+ #include "WebGPUShaderModuleImpl.h"
+ #include "WebGPUTextureImpl.h"
+ #include "WebGPUTextureViewImpl.h"
++#if !PLATFORM(WIN)
+ #include "WebGPUXRBindingImpl.h"
+ #include "WebGPUXRProjectionLayerImpl.h"
+ #include "WebGPUXRSubImageImpl.h"
+ #include "WebGPUXRViewImpl.h"
++#endif
+ #include <wtf/TZoneMallocInlines.h>
+ 
+ namespace WebCore::WebGPU {
+@@ -124,7 +128,12 @@
  
  WGPUSurface DowncastConvertToBackingContext::convertToBacking(const PresentationContext& presentationContext)
  {
@@ -2091,9 +2104,52 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  WGPUQuerySet DowncastConvertToBackingContext::convertToBacking(const QuerySet& querySet)
+@@ -184,22 +193,42 @@
+ 
+ WGPUXRBinding DowncastConvertToBackingContext::convertToBacking(const XRBinding& xrBinding)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(xrBinding);
++    return nullptr;
++#else
+     return downcast<XRBindingImpl>(xrBinding).backing();
++#endif
+ }
+ 
+ WGPUXRProjectionLayer DowncastConvertToBackingContext::convertToBacking(const XRProjectionLayer& layer)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(layer);
++    return nullptr;
++#else
+     return downcast<XRProjectionLayerImpl>(layer).backing();
++#endif
+ }
+ 
+ WGPUXRSubImage DowncastConvertToBackingContext::convertToBacking(const XRSubImage& subImage)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(subImage);
++    return nullptr;
++#else
+     return downcast<XRSubImageImpl>(subImage).backing();
++#endif
+ }
+ 
+ WGPUXRView DowncastConvertToBackingContext::convertToBacking(const XRView& xrView)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(xrView);
++    return nullptr;
++#else
+     return downcast<XRViewImpl>(xrView).backing();
++#endif
+ }
+ 
+ } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:51:32.854986469 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 13:25:49.894876885 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 16:47:36.677425429 +0000
 @@ -32,13 +32,21 @@
  #include "WebGPUCompositorIntegrationImpl.h"
  #include "WebGPUDowncastConvertToBackingContext.h"
@@ -2116,7 +2172,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  
  namespace WebCore::WebGPU {
  
-@@ -52,12 +60,32 @@
+@@ -52,33 +60,73 @@
  
  GPUImpl::~GPUImpl() = default;
  
@@ -2149,9 +2205,37 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  
  void GPUImpl::requestAdapter(const RequestAdapterOptions& options, CompletionHandler<void(RefPtr<Adapter>&&)>&& callback)
  {
-@@ -79,6 +107,15 @@
+     Ref convertToBackingContext = m_convertToBackingContext;
+ 
++#if PLATFORM(WIN)
+     WGPURequestAdapterOptions backingOptions {
+-        .compatibleSurface = nullptr,
++        .nextInChain = nullptr,
++        .featureLevel = WGPUFeatureLevel_Undefined,
+ #if CPU(X86_64)
+         .powerPreference = WGPUPowerPreference_HighPerformance,
+ #else
+         .powerPreference = options.powerPreference ? convertToBackingContext->convertToBacking(*options.powerPreference) : static_cast<WGPUPowerPreference>(WGPUPowerPreference_Undefined),
+ #endif
+-#if PLATFORM(WIN)
++        .forceFallbackAdapter = options.forceFallbackAdapter,
+         .backendType = WGPUBackendType_D3D12,
++        .compatibleSurface = nullptr,
++    };
+ #else
+-        .backendType = WGPUBackendType_Metal,
++    WGPURequestAdapterOptions backingOptions {
++        .compatibleSurface = nullptr,
++#if CPU(X86_64)
++        .powerPreference = WGPUPowerPreference_HighPerformance,
++#else
++        .powerPreference = options.powerPreference ? convertToBackingContext->convertToBacking(*options.powerPreference) : static_cast<WGPUPowerPreference>(WGPUPowerPreference_Undefined),
+ #endif
++        .backendType = WGPUBackendType_Metal,
+         .forceFallbackAdapter = options.forceFallbackAdapter,
          .xrCompatible = options.xrCompatible,
      };
++#endif
  
 +#if PLATFORM(WIN)
 +    auto* userdata = new DawnRequestAdapterUserdata { WTF::move(callback), convertToBackingContext.copyRef(), m_backing.get() };
@@ -2165,7 +2249,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto blockPtr = makeBlockPtr([convertToBackingContext = convertToBackingContext.copyRef(), callback = WTF::move(callback)](WGPURequestAdapterStatus status, WGPUAdapter adapter, const char*) mutable {
          if (status == WGPURequestAdapterStatus_Success)
              callback(AdapterImpl::create(adoptWebGPU(adapter), convertToBackingContext));
-@@ -86,6 +123,7 @@
+@@ -86,6 +134,7 @@
              callback(nullptr);
      });
      wgpuInstanceRequestAdapter(m_backing.get(), &backingOptions, &requestAdapterCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in requestAdapterCallback().
@@ -2173,7 +2257,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  static WTF::Function<void(CompletionHandler<void()>&&)> convert(WGPUOnSubmittedWorkScheduledCallback&& onSubmittedWorkScheduledCallback)
-@@ -97,6 +135,10 @@
+@@ -97,6 +146,10 @@
  
  RefPtr<PresentationContext> GPUImpl::createPresentationContext(const PresentationContextDescriptor& presentationContextDescriptor)
  {
@@ -2184,7 +2268,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      Ref compositorIntegration = m_convertToBackingContext->convertToBacking(protect(presentationContextDescriptor.compositorIntegration).get());
  
      auto registerCallbacksBlock = makeBlockPtr([&](WGPURenderBuffersWereRecreatedBlockCallback renderBuffersWereRecreatedCallback, WGPUOnSubmittedWorkScheduledCallback onSubmittedWorkScheduledCallback) {
-@@ -113,6 +155,7 @@
+@@ -113,6 +166,7 @@
      auto result = PresentationContextImpl::create(adoptWebGPU(wgpuInstanceCreateSurface(m_backing.get(), &surfaceDescriptor)), m_convertToBackingContext);
      compositorIntegration->setPresentationContext(result);
      return result;
