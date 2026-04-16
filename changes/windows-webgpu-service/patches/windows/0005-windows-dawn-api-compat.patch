@@ -1061,7 +1061,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 11:51:32.007705221 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 17:33:03.258999517 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 18:13:25.776908232 +0000
 @@ -223,9 +223,17 @@
      case FeatureName::Float32Filterable:
          return WGPUFeatureName_Float32Filterable;
@@ -1080,7 +1080,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      case FeatureName::Float32Blendable:
          return WGPUFeatureName_Float32Blendable;
      case FeatureName::ClipDistances:
-@@ -729,7 +737,11 @@
+@@ -729,9 +737,17 @@
      case VertexFormat::Sint32x4:
          return WGPUVertexFormat_Sint32x4;
      case VertexFormat::Unorm1010102:
@@ -1090,8 +1090,14 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
          return WGPUVertexFormat_Unorm1010102;
 +#endif
      case VertexFormat::Unorm8x4Bgra:
++#if PLATFORM(WIN)
++        return WGPUVertexFormat_Unorm8x4BGRA;
++#else
          return WGPUVertexFormat_Unorm8x4Bgra;
++#endif
      }
+ }
+ 
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:51:32.854912098 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:27:02.480552679 +0000
@@ -2194,7 +2200,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:51:32.854986469 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 16:47:36.677425429 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 18:13:25.777908037 +0000
 @@ -32,13 +32,21 @@
  #include "WebGPUCompositorIntegrationImpl.h"
  #include "WebGPUDowncastConvertToBackingContext.h"
@@ -2294,26 +2300,35 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto blockPtr = makeBlockPtr([convertToBackingContext = convertToBackingContext.copyRef(), callback = WTF::move(callback)](WGPURequestAdapterStatus status, WGPUAdapter adapter, const char*) mutable {
          if (status == WGPURequestAdapterStatus_Success)
              callback(AdapterImpl::create(adoptWebGPU(adapter), convertToBackingContext));
-@@ -86,6 +134,7 @@
+@@ -86,17 +134,21 @@
              callback(nullptr);
      });
      wgpuInstanceRequestAdapter(m_backing.get(), &backingOptions, &requestAdapterCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in requestAdapterCallback().
 +#endif
  }
  
- static WTF::Function<void(CompletionHandler<void()>&&)> convert(WGPUOnSubmittedWorkScheduledCallback&& onSubmittedWorkScheduledCallback)
-@@ -97,6 +146,10 @@
- 
- RefPtr<PresentationContext> GPUImpl::createPresentationContext(const PresentationContextDescriptor& presentationContextDescriptor)
+-static WTF::Function<void(CompletionHandler<void()>&&)> convert(WGPUOnSubmittedWorkScheduledCallback&& onSubmittedWorkScheduledCallback)
++RefPtr<PresentationContext> GPUImpl::createPresentationContext(const PresentationContextDescriptor& presentationContextDescriptor)
  {
+-    return [onSubmittedWorkScheduledCallback = makeBlockPtr(WTF::move(onSubmittedWorkScheduledCallback))](CompletionHandler<void()>&& completionHandler) {
+-        onSubmittedWorkScheduledCallback(makeBlockPtr(WTF::move(completionHandler)).get());
 +#if PLATFORM(WIN)
 +    UNUSED_PARAM(presentationContextDescriptor);
 +    return nullptr;
 +#else
++    auto convert = [](WGPUOnSubmittedWorkScheduledCallback&& onSubmittedWorkScheduledCallback) {
++        return [onSubmittedWorkScheduledCallback = makeBlockPtr(WTF::move(onSubmittedWorkScheduledCallback))](CompletionHandler<void()>&& completionHandler) {
++            onSubmittedWorkScheduledCallback(makeBlockPtr(WTF::move(completionHandler)).get());
++        };
+     };
+-}
+ 
+-RefPtr<PresentationContext> GPUImpl::createPresentationContext(const PresentationContextDescriptor& presentationContextDescriptor)
+-{
      Ref compositorIntegration = m_convertToBackingContext->convertToBacking(protect(presentationContextDescriptor.compositorIntegration).get());
  
      auto registerCallbacksBlock = makeBlockPtr([&](WGPURenderBuffersWereRecreatedBlockCallback renderBuffersWereRecreatedCallback, WGPUOnSubmittedWorkScheduledCallback onSubmittedWorkScheduledCallback) {
-@@ -113,6 +166,7 @@
+@@ -113,6 +165,7 @@
      auto result = PresentationContextImpl::create(adoptWebGPU(wgpuInstanceCreateSurface(m_backing.get(), &surfaceDescriptor)), m_convertToBackingContext);
      compositorIntegration->setPresentationContext(result);
      return result;
