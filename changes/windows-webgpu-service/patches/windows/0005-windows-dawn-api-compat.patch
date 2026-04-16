@@ -816,6 +816,118 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  } // namespace WebCore::WebGPU
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.cpp	2026-04-16 15:34:49.266010411 +0000
+@@ -32,13 +32,17 @@
+ #include "WebGPUDevice.h"
+ #include "WebGPUQueue.h"
+ #include "WebGPUTextureFormat.h"
++#if !PLATFORM(WIN)
+ #include <CoreFoundation/CoreFoundation.h>
+ #include <WebCore/IOSurface.h>
+ #include <WebCore/NativeImage.h>
+ #include <WebGPU/WebGPUExt.h>
+ #include <pal/spi/cg/CoreGraphicsSPI.h>
++#endif
+ #include <wtf/TZoneMallocInlines.h>
++#if !PLATFORM(WIN)
+ #include <wtf/spi/cocoa/IOSurfaceSPI.h>
++#endif
+ 
+ namespace WebCore::WebGPU {
+ 
+@@ -53,15 +57,20 @@
+ 
+ void CompositorIntegrationImpl::prepareForDisplay(uint32_t frameIndex, CompletionHandler<void()>&& completionHandler)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(frameIndex);
++    completionHandler();
++#else
+     if (RefPtr presentationContext = m_presentationContext)
+         presentationContext->present(frameIndex);
+ 
+     m_onSubmittedWorkScheduledCallback(WTF::move(completionHandler));
++#endif
+ }
+ 
+ void CompositorIntegrationImpl::updateContentsHeadroom(float headroom)
+ {
+-#if HAVE(SUPPORT_HDR_DISPLAY)
++#if !PLATFORM(WIN) && HAVE(SUPPORT_HDR_DISPLAY)
+     for (auto& ioSurface : m_renderBuffers)
+         ioSurface->setContentEDRHeadroom(headroom);
+ #else
+@@ -119,6 +128,10 @@
+ 
+ void CompositorIntegrationImpl::withDisplayBufferAsNativeImage(uint32_t bufferIndex, Function<void(WebCore::NativeImage*)> completion)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(bufferIndex);
++    completion(nullptr);
++#else
+     if (!m_renderBuffers.size() || bufferIndex >= m_renderBuffers.size() || !m_device.get())
+         return completion(nullptr);
+ 
+@@ -148,6 +161,7 @@
+ 
+     CGImageSetCachingFlags(displayImage->platformImage().get(), kCGImageCachingTransient);
+     completion(displayImage.get());
++#endif
+ }
+ 
+ void CompositorIntegrationImpl::paintCompositedResultsToCanvas(WebCore::ImageBuffer&, uint32_t)
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.h
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.h	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCompositorIntegrationImpl.h	2026-04-16 15:34:39.455930405 +0000
+@@ -29,8 +29,10 @@
+ 
+ #include "WebGPUCompositorIntegration.h"
+ 
++#if !PLATFORM(WIN)
+ #include "WebGPUPresentationContextImpl.h"
+ #include <WebCore/IOSurface.h>
++#endif
+ #include <WebGPU/WebGPU.h>
+ #include <wtf/CompletionHandler.h>
+ #include <wtf/Function.h>
+@@ -51,6 +53,7 @@
+ namespace WebCore::WebGPU {
+ 
+ class ConvertToBackingContext;
++class PresentationContextImpl;
+ 
+ class CompositorIntegrationImpl final : public CompositorIntegration {
+     WTF_MAKE_TZONE_ALLOCATED(CompositorIntegrationImpl);
+@@ -62,6 +65,7 @@
+ 
+     virtual ~CompositorIntegrationImpl();
+ 
++#if !PLATFORM(WIN)
+     void setPresentationContext(PresentationContextImpl& presentationContext)
+     {
+         ASSERT(!m_presentationContext);
+@@ -75,6 +79,7 @@
+         ASSERT(!m_onSubmittedWorkScheduledCallback);
+         m_onSubmittedWorkScheduledCallback = WTF::move(onSubmittedWorkScheduledCallback);
+     }
++#endif
+ 
+     void withDisplayBufferAsNativeImage(uint32_t bufferIndex, Function<void(WebCore::NativeImage*)>) final;
+     void NODELETE paintCompositedResultsToCanvas(WebCore::ImageBuffer&, uint32_t) final;
+@@ -101,9 +106,11 @@
+     WTF::Function<void(CFArrayRef)> m_renderBuffersWereRecreatedCallback;
+ #endif
+ 
++#if !PLATFORM(WIN)
+     WTF::Function<void(CompletionHandler<void()>&&)> m_onSubmittedWorkScheduledCallback;
+ 
+     RefPtr<PresentationContextImpl> m_presentationContext;
++#endif
+     const Ref<ConvertToBackingContext> m_convertToBackingContext;
+     WeakPtr<Device> m_device;
+ };
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp	2026-04-16 11:51:32.007705221 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUComputePassEncoderImpl.cpp	2026-04-16 11:51:10.421822051 +0000
@@ -1343,7 +1455,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +#endif // PLATFORM(WIN)
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 11:51:32.862545691 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 14:46:09.042412543 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 15:34:29.868806769 +0000
 @@ -46,7 +46,9 @@
  #include "WebGPUOutOfMemoryError.h"
  #include "WebGPUPipelineLayoutDescriptor.h"
@@ -1753,7 +1865,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  static void popErrorScopeCallback(WGPUErrorType type, const char* message, void* userdata)
  {
      auto block = reinterpret_cast<void(^)(WGPUErrorType, const char*)>(userdata);
-@@ -661,9 +827,63 @@
+@@ -661,9 +827,61 @@
      block(type, message);
      Block_release(block);
  }
@@ -1795,8 +1907,6 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
 +        break;
 +    case WGPUErrorType_Unknown:
 +        break;
-+    case WGPUErrorType_DeviceLost:
-+        break;
 +    }
 +
 +    data->callback(succeeded, WTF::move(error));
@@ -1817,7 +1927,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto blockPtr = makeBlockPtr([callback = WTF::move(callback)](WGPUErrorType errorType, const char* message) mutable {
          std::optional<Error> error;
          bool succeeded = false;
-@@ -691,10 +911,14 @@
+@@ -691,10 +909,14 @@
          callback(succeeded, WTF::move(error));
      });
      wgpuDevicePopErrorScope(m_backing.get(), &popErrorScopeCallback, Block_copy(blockPtr.get())); // Block_copy is matched with Block_release above in popErrorScopeCallback().
@@ -1832,7 +1942,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      auto blockPtr = makeBlockPtr([callback = WTF::move(callback)](WGPUErrorType errorType, const char* message) mutable {
          std::optional<Error> error;
          bool hasUncapturedError = true;
-@@ -722,10 +946,14 @@
+@@ -722,10 +944,14 @@
          callback(hasUncapturedError, WTF::move(error));
      });
      wgpuDeviceSetUncapturedErrorCallback(m_backing.get(), &setUncapturedScopeCallback, Block_copy(blockPtr.get()));
@@ -1847,7 +1957,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      wgpuDeviceSetDeviceLostCallbackWithBlock(m_backing.get(), makeBlockPtr([callback = WTF::move(callback)](WGPUDeviceLostReason reason, const char*) mutable {
          switch (reason) {
          case WGPUDeviceLostReason_Undefined:
-@@ -737,16 +965,25 @@
+@@ -737,16 +963,25 @@
              return;
          }
      }).get());
@@ -1934,6 +2044,32 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  };
  
  } // namespace WebCore::WebGPU
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp	2026-04-16 11:51:32.008600603 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDowncastConvertToBackingContext.cpp	2026-04-16 15:34:54.591968037 +0000
+@@ -41,7 +41,9 @@
+ #include "WebGPUExternalTextureImpl.h"
+ #include "WebGPUImpl.h"
+ #include "WebGPUPipelineLayoutImpl.h"
++#if !PLATFORM(WIN)
+ #include "WebGPUPresentationContextImpl.h"
++#endif
+ #include "WebGPUQuerySetImpl.h"
+ #include "WebGPUQueueImpl.h"
+ #include "WebGPURenderBundleEncoderImpl.h"
+@@ -124,7 +126,12 @@
+ 
+ WGPUSurface DowncastConvertToBackingContext::convertToBacking(const PresentationContext& presentationContext)
+ {
++#if PLATFORM(WIN)
++    UNUSED_PARAM(presentationContext);
++    return nullptr;
++#else
+     return downcast<PresentationContextImpl>(presentationContext).backing();
++#endif
+ }
+ 
+ WGPUQuerySet DowncastConvertToBackingContext::convertToBacking(const QuerySet& querySet)
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 11:51:32.854986469 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp	2026-04-16 13:25:49.894876885 +0000
