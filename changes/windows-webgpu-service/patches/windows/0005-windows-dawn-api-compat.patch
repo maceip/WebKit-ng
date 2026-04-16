@@ -1054,7 +1054,7 @@ diff -ruN a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDawnCompat.h b/So
 +#include "../InternalAPI/WebGPUSupportedFeatures.h"
 +#include "../InternalAPI/WebGPUSupportedLimits.h"
 +#include <dawn/webgpu.h>
-+#include <wtf/CString.h>
++#include <wtf/text/CString.h>
 +#include <wtf/text/WTFString.h>
 +
 +namespace WebCore::WebGPU::DawnCompat {
