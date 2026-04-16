@@ -2231,7 +2231,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  } // namespace WebCore::WebGPU
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 11:51:32.009600408 +0000
-+++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 12:32:10.104685076 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp	2026-04-16 15:58:01.797517523 +0000
 @@ -24,6 +24,8 @@
   */
  
@@ -2319,7 +2319,20 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  void QueueImpl::writeBuffer(
-@@ -109,6 +151,22 @@
+@@ -98,7 +140,12 @@
+     Size64 dataOffset,
+     std::optional<Size64> size)
+ {
++#if PLATFORM(WIN)
++    auto data = source.subspan(dataOffset, size.value_or(source.size() - dataOffset));
++    wgpuQueueWriteBuffer(m_backing.get(), protect(m_convertToBackingContext)->convertToBacking(buffer), bufferOffset, data.data(), data.size());
++#else
+     wgpuQueueWriteBuffer(m_backing.get(), protect(m_convertToBackingContext)->convertToBacking(buffer), bufferOffset, source.subspan(dataOffset, size.value_or(source.size() - dataOffset)));
++#endif
+ }
+ 
+ void QueueImpl::writeTexture(
+@@ -109,6 +156,22 @@
  {
      Ref convertToBackingContext = m_convertToBackingContext;
  
@@ -2342,7 +2355,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
      WGPUImageCopyTexture backingDestination {
          .texture = convertToBackingContext->convertToBacking(protect(destination.texture).get()),
          .mipLevel = destination.mipLevel,
-@@ -125,6 +183,7 @@
+@@ -125,6 +188,7 @@
      WGPUExtent3D backingSize = convertToBackingContext->convertToBacking(size);
  
      wgpuQueueWriteTexture(m_backing.get(), &backingDestination, source, &backingDataLayout, &backingSize);
@@ -2350,7 +2363,7 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  void QueueImpl::copyExternalImageToTexture(
-@@ -139,7 +198,15 @@
+@@ -139,7 +203,15 @@
  
  void QueueImpl::setLabelInternal(const String& label)
  {
