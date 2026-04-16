@@ -1,9 +1,9 @@
 diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
 new file mode 100644
-index 00000000000..64c4423dafd
+index 00000000000..62b012d7402
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,168 @@
 +/*
 + * Copyright (C) 2026 Apple Inc. All rights reserved.
 + *
@@ -83,6 +83,28 @@ index 00000000000..64c4423dafd
 +    WGPUColorSpace colorSpace;
 +} WGPUExternalTextureDescriptor;
 +
++static inline void wgpuAdapterReference(WGPUAdapter) { }
++static inline void wgpuBindGroupReference(WGPUBindGroup) { }
++static inline void wgpuBindGroupLayoutReference(WGPUBindGroupLayout) { }
++static inline void wgpuBufferReference(WGPUBuffer) { }
++static inline void wgpuCommandBufferReference(WGPUCommandBuffer) { }
++static inline void wgpuCommandEncoderReference(WGPUCommandEncoder) { }
++static inline void wgpuComputePassEncoderReference(WGPUComputePassEncoder) { }
++static inline void wgpuComputePipelineReference(WGPUComputePipeline) { }
++static inline void wgpuDeviceReference(WGPUDevice) { }
++static inline void wgpuInstanceReference(WGPUInstance) { }
++static inline void wgpuPipelineLayoutReference(WGPUPipelineLayout) { }
++static inline void wgpuQuerySetReference(WGPUQuerySet) { }
++static inline void wgpuQueueReference(WGPUQueue) { }
++static inline void wgpuRenderBundleReference(WGPURenderBundle) { }
++static inline void wgpuRenderBundleEncoderReference(WGPURenderBundleEncoder) { }
++static inline void wgpuRenderPassEncoderReference(WGPURenderPassEncoder) { }
++static inline void wgpuRenderPipelineReference(WGPURenderPipeline) { }
++static inline void wgpuSamplerReference(WGPUSampler) { }
++static inline void wgpuShaderModuleReference(WGPUShaderModule) { }
++static inline void wgpuSurfaceReference(WGPUSurface) { }
++static inline void wgpuTextureReference(WGPUTexture) { }
++static inline void wgpuTextureViewReference(WGPUTextureView) { }
 +static inline void wgpuExternalTextureReference(WGPUExternalTexture) { }
 +static inline void wgpuExternalTextureRelease(WGPUExternalTexture) { }
 +static inline void wgpuXRBindingReference(WGPUXRBinding) { }
