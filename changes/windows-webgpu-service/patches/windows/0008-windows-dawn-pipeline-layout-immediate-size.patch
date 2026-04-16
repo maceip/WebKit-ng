@@ -1,0 +1,12 @@
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 19:46:15.869049918 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp	2026-04-16 19:46:01.284904516 +0000
+@@ -351,6 +351,9 @@
+         .label = DAWN_LABEL_CSTRING(label),
+         .bindGroupLayoutCount = descriptor.bindGroupLayouts ? backingBindGroupLayouts.size() : 0,
+         .bindGroupLayouts = descriptor.bindGroupLayouts ? backingBindGroupLayouts.span().data() : nullptr,
++#if PLATFORM(WIN)
++        .immediateSize = 0,
++#endif
+     };
+ 
+     return PipelineLayoutImpl::create(adoptWebGPU(wgpuDeviceCreatePipelineLayout(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
