@@ -63,6 +63,7 @@
     .st-running { color: var(--warn); }
     .st-succeeded { color: var(--ok); }
     .st-failed, .st-cancelled { color: var(--bad); }
+    .st-unknown { color: var(--muted); }
     .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
     .actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
     .actions a { color: var(--accent); font-size: 12px; }
@@ -88,17 +89,25 @@
   </header>
   <main>
     <nav class="tabs" aria-label="Dashboard tabs">
-      <button type="button" class="tab active" data-tab="builds">Active builds</button>
+      <button type="button" class="tab active" data-tab="builds">Builds</button>
       <button type="button" class="tab" data-tab="new-build">New build</button>
     </nav>
     <section id="panel-builds" class="panel">
       <h2>Builds</h2>
+      <p class="sub" style="margin:0 0 0.75rem;">Remote SSM builds listed from marker env files: status is <strong>inferred</strong> from the orchestrator log on this machine (not from lingering marker files alone). Use log preview for full ninja output.</p>
       <div class="toolbar">
         <button type="button" class="secondary" id="btn-refresh">Refresh now</button>
         <label class="plat"><input type="checkbox" id="autorefresh" checked /> Auto-refresh list (10s)</label>
       </div>
       <div id="builds-wrap" style="overflow-x:auto;"></div>
-      <pre id="log-preview" class="logbox" hidden></pre>
+      <div id="log-preview-wrap" class="stack" hidden>
+        <div class="toolbar">
+          <span class="sub" id="log-preview-title">Log preview</span>
+          <label class="plat"><input type="checkbox" id="log-ninja-only" /> Show ninja / compiler lines only</label>
+          <label class="plat"><input type="checkbox" id="log-large-tail" checked /> Load last ~4000 lines (slower)</label>
+        </div>
+        <pre id="log-preview" class="logbox"></pre>
+      </div>
     </section>
     <section id="panel-new-build" class="panel" hidden>
       <h2>New build</h2>
@@ -116,7 +125,7 @@
       <div id="start-msg" class="msg"></div>
     </section>
   </main>
-  <footer>API: <code>POST /builds</code> · <code>GET /builds</code> · <code>GET /builds/:id/logs/:platform?tail=200</code></footer>
+  <footer>API: <code>POST /builds</code> · <code>GET /builds</code> · <code>GET /builds/:id/logs/:platform?tail=</code> (up to 15000 lines)</footer>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -183,7 +192,34 @@
       if (s === 'running') return 'st-running';
       if (s === 'succeeded') return 'st-succeeded';
       if (s === 'failed' || s === 'cancelled') return 'st-failed';
+      if (s === 'unknown') return 'st-unknown';
       return '';
+    }
+
+    /** Keep lines that usually contain ninja progress, compile, or hard errors */
+    function filterNinjaCompilerLines(text) {
+      return text.split(/\r?\n/).filter((line) => {
+        const t = line.trim();
+        if (!t) return false;
+        if (/^\[\s*\d+\s*\/\s*\d+\]/.test(t)) return true;
+        if (/^ninja\b/i.test(t)) return true;
+        if (/\b(cmake|clang|clang-cl|cl\.exe|link\.exe|lld-link)\b/i.test(t)) return true;
+        if (/^FAILED:/.test(t)) return true;
+        if (/error C\d*:|fatal error|ninja: build stopped|BUILD_FAILED|BUILD_DONE/i.test(t)) return true;
+        return false;
+      }).join('\n');
+    }
+
+    let lastRawLogText = '';
+
+    function applyLogPreviewFilter() {
+      const box = $('log-preview');
+      if (!lastRawLogText) return;
+      const useFilter = $('log-ninja-only').checked;
+      box.textContent = useFilter ? filterNinjaCompilerLines(lastRawLogText) : lastRawLogText;
+      if (useFilter && !filterNinjaCompilerLines(lastRawLogText).trim()) {
+        box.textContent = '(No ninja/compiler lines in this tail — disable filter or increase tail.)';
+      }
     }
 
     function renderBuilds(builds) {
@@ -194,8 +230,9 @@
       }
       const rows = builds.map((b) => {
         const plats = (b.platforms || []).map((p) => {
-          const logUrl = '/builds/' + encodeURIComponent(b.id) + '/logs/' + encodeURIComponent(p.name) + '?tail=200';
-          return '<div><span class="' + statusClass(p.status) + '">' + esc(p.name) + ': ' + esc(p.status) + '</span> · <a href="' + logUrl + '" target="_blank" rel="noopener">log</a> · <button type="button" class="secondary" data-log="' + esc(b.id) + '" data-platform="' + esc(p.name) + '">Preview</button></div>';
+          const logUrl = '/builds/' + encodeURIComponent(b.id) + '/logs/' + encodeURIComponent(p.name) + '?tail=4000';
+          const inf = p.externalInference ? ' <span class="sub" title="' + esc(p.externalInference) + '">(' + esc(p.externalInference).slice(0, 40) + (p.externalInference.length > 40 ? '…' : '') + ')</span>' : '';
+          return '<div><span class="' + statusClass(p.status) + '">' + esc(p.name) + ': ' + esc(p.status) + '</span>' + inf + ' · <a href="' + logUrl + '" target="_blank" rel="noopener">full log</a> · <button type="button" class="secondary" data-log="' + esc(b.id) + '" data-platform="' + esc(p.name) + '">Preview</button></div>';
         }).join('');
         return '<tr><td class="mono">' + esc(b.id) + '</td><td class="' + statusClass(b.status) + '">' + esc(b.status) + '</td><td>' + esc(b.createdAt || '') + '</td><td>' + esc(b.reason || '—') + '</td><td>' + plats + '</td><td class="actions">' +
           '<a href="/builds/' + encodeURIComponent(b.id) + '" target="_blank">JSON</a> ' +
@@ -223,10 +260,13 @@
       });
       w.querySelectorAll('[data-log]').forEach((btn) => {
         btn.addEventListener('click', async () => {
-          const text = await fetch('/builds/' + encodeURIComponent(btn.dataset.log) + '/logs/' + encodeURIComponent(btn.dataset.platform) + '?tail=250').then((r) => r.text());
-          const box = $('log-preview');
-          box.hidden = false;
-          box.textContent = text;
+          const tail = $('log-large-tail').checked ? '4000' : '800';
+          const r = await fetch('/builds/' + encodeURIComponent(btn.dataset.log) + '/logs/' + encodeURIComponent(btn.dataset.platform) + '?tail=' + tail);
+          const text = await r.text();
+          lastRawLogText = text;
+          $('log-preview-wrap').hidden = false;
+          $('log-preview-title').textContent = 'Log preview — ' + btn.dataset.log + ' / ' + btn.dataset.platform + ' (last ' + tail + ' lines)';
+          applyLogPreviewFilter();
         });
       });
     }
@@ -281,6 +321,7 @@
       if ($('autorefresh').checked) timer = setInterval(() => refreshBuilds().catch(() => {}), 10000);
     }
     $('autorefresh').addEventListener('change', armTimer);
+    $('log-ninja-only').addEventListener('change', () => applyLogPreviewFilter());
 
     (async () => {
       try {

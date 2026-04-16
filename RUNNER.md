@@ -8,8 +8,9 @@ into `var/logs/`, and record state in `var/state.json`.
 ## Current state (2026-04-16)
 
 - **REST API**: implemented (`service/src/server.js`, port 8787).
-- **Web UI**: not yet built. The API is consumable from curl today; a minimal
-  HTML + vanilla JS frontend is the next item on the roadmap.
+- **Dashboard**: bare-bones HTML at `GET /` (`service/public/index.html`): pick
+  platforms, optional reason, start build, list builds, tail logs, cancel. API
+  discovery JSON is `GET /meta` (what used to be on `/`).
 - **Windows**: green via `run-build.sh windows <id>` with WebGPU/Dawn enabled
   on the iangrunert Gigacage/Skia fixes branch. Detached worker, marker poll,
   packaging, S3 upload, Dawn DLL load validation, and the Abseil/Dawn ABI
@@ -23,7 +24,8 @@ into `var/logs/`, and record state in `var/state.json`.
 ## Endpoints
 
 ```
-GET  /                              service info + endpoint list
+GET  /                              HTML dashboard (build UI)
+GET  /meta                          JSON service name + endpoint list
 GET  /platforms                     config/platforms.json, including presets
 GET  /builds                        list all builds (from var/state.json)
 POST /builds                        start a new build
@@ -201,9 +203,8 @@ or a marker-poll probe). Long-running xcodebuild/ninja sessions run
 
 ## What is missing
 
-1. **Web UI**. Plain HTML served from the Node service, with a row per build,
-   a platform selector, expand-to-view logs, and a download button that hits
-   the S3 artifact directly. The API can already drive it.
+1. **Richer dashboard**. In-page log preview, S3 artifact links / downloads, and
+   restart-from-UI beyond the current minimal flows.
 2. **Validation phase hardening**. Windows now writes the probe and DLL-load
    JSON and reports real adapter/device/queue state. The next Windows step is
    canvas presentation once the Dawn swapchain path exists; macOS still needs

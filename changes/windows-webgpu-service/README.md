@@ -57,8 +57,11 @@ the current Cocoa GPU-process and presentation stack. The slice loads
 `webgpu_dawn.dll` at runtime, creates a Dawn instance, and resolves
 `requestAdapter()` only when Dawn returns a real adapter.
 
-This is intentionally adapter-only. `requestDevice()` still returns `null`;
-canvas presentation and GPU-process remoting remain separate follow-up surfaces.
+Older adapter-only snapshots returned `null` from `requestDevice()`. The in-tree
+Windows WebGPU path with `HAVE(WEBGPU_IMPLEMENTATION)` wires Dawn through
+`WebGPUAdapterImpl` / `WebGPUDeviceImpl` and pumps instance events so
+`requestDevice()` can complete; canvas still needs Win `GPUCanvasContext` plus HWND
+in `GPUPresentationContextDescriptor` for full presentation.
 
 Not allowed here:
 
@@ -76,9 +79,27 @@ changes/windows-webgpu-service/patches/windows
 
 Keep patch numbering ordered within each directory.
 
+## Dawn event pumping (Windows)
+
+Dawn may deliver `requestAdapter` / `requestDevice` callbacks asynchronously. WebCore
+calls `wgpuInstanceProcessEvents` in a bounded loop after those entry points until the
+callback runs (see `WebGPUImpl.cpp` and `WebGPUAdapterImpl.cpp`). If you add new
+async WebGPU entry points on Windows, pump the same `WGPUInstance` the same way or
+schedule periodic pumping on the UI message loop.
+
+## HWND surface (presentation)
+
+`GPUImpl::createPresentationContext` builds a `WGPUSurface` with
+`WGPUSurfaceDescriptorFromWindowsHWND` when `PresentationContextDescriptor` supplies a
+non-null `hwnd` (`WebGPUDawnCompat::createSurfaceForWindowsHWND`). Populate
+`GPUPresentationContextDescriptor::hwnd` / `hinstance` from the native view when Win
+canvas integration is wired. Until `GPUCanvasContext::create` is implemented for
+Windows (`GPUCanvasContext.cpp` still returns `nullptr` on non-Cocoa), end-to-end
+canvas WebGPU uses harness code or tests that fill those handles explicitly.
+
 ## Acceptance
 
-The build is not accepted from compile success alone. It needs:
+The build is not accepted from compile success alone. Minimum lane checks:
 
 - `ENABLE_WEBGPU:BOOL=ON` in `CMakeCache.txt`.
 - Dawn DLLs present and loadable beside MiniBrowser.
@@ -86,3 +107,11 @@ The build is not accepted from compile success alone. It needs:
 - Runtime probe reports `navigator.gpu === true`.
 - Runtime probe reports a non-null adapter from `navigator.gpu.requestAdapter()`.
 - Manifest and validation artifacts uploaded by the standard Windows harness.
+
+Extended ladder toward a rendered frame (“ball on screen”):
+
+1. Non-null adapter (above).
+2. `adapter.requestDevice()` resolves (pumping covers async device callbacks).
+3. Swap chain / surface: non-null `hwnd` path + `PresentationContextImpl::configure`.
+4. Queue submit + `present` without validation errors.
+5. Optional: Win `GPUCanvasContext` so pages can call `getContext("webgpu")` without a custom harness.

@@ -258,7 +258,10 @@ function Restore-BaselineVcpkg {
   if (-not (Test-Path $aws)) { $aws = "aws.exe" }
   $archive = Join-Path $Bootstrap "installers\release-vcpkg_installed.tar"
   Invoke-Native $aws @("s3", "cp", "$BaselineS3Prefix/release-vcpkg_installed.tar", $archive, "--region", $BaselineS3Region)
-  $extract = Join-Path $Bootstrap "baseline-vcpkg"
+  # Keep the extraction root short. The vcpkg tree contains very deep include
+  # and pkgconfig paths, and Windows bsdtar can fail before long-path handling
+  # helps if the temporary extraction root is too verbose.
+  $extract = "C:\B\v"
   if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
   New-Dir $extract
   Invoke-Native "tar.exe" @("-xf", $archive, "-C", $extract)

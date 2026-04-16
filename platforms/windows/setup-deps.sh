@@ -9,9 +9,11 @@ load_env
 
 usage() {
   cat <<'EOF'
-usage: platforms/windows/setup-deps.sh [--check-online] [--no-wait]
+usage: platforms/windows/setup-deps.sh [--no-wait]
 
-Provision the Windows builder selected by NG_WINDOWS_INSTANCE_ID.
+Install/provision the dependencies required by the Windows WebKit builder
+selected by NG_WINDOWS_INSTANCE_ID. This uploads and runs setup-deps.ps1 on
+the Windows host through SSM.
 
 Environment:
   AWS_REGION                         SSM region (default: eu-west-1)
@@ -24,19 +26,12 @@ Environment:
   NG_WINDOWS_REQUIRE_DAWN            require Dawn header/DLL after setup
   NG_WINDOWS_ENABLE_WEBGPU           also implies NG_WINDOWS_REQUIRE_DAWN=1
   NG_WINDOWS_SETUP_DEPS_ARGS         extra PowerShell args passed through
-
---check-online keeps the old behavior intentionally named as a health check.
 EOF
 }
 
-CHECK_ONLY=0
 WAIT=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --check-online)
-      CHECK_ONLY=1
-      shift
-      ;;
     --no-wait)
       WAIT=0
       shift
@@ -63,7 +58,7 @@ TOOLBIN="${NG_WINDOWS_TOOLBIN:-C:/Bootstrap/toolbin}"
 VCPKG_ROOT="${NG_WINDOWS_VCPKG_ROOT:-C:/vcpkg}"
 PROVISION_S3="${NG_WINDOWS_PROVISION_S3:-${NG_ARTIFACT_BUCKET:-s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit}/windows/provision}"
 S3_CP_REGION="${NG_ARTIFACT_UPLOAD_REGION:-eu-central-1}"
-BASELINE_S3="${NG_WINDOWS_BASELINE_S3:-s3://cory-build-artifacts-euc1-095713295645-20260407/webkit/windows-build29-20260413}"
+BASELINE_S3="${NG_WINDOWS_BASELINE_S3:-s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/provision/baseline}"
 BASELINE_REGION="${NG_WINDOWS_BASELINE_S3_REGION:-eu-central-1}"
 RESTORE_BASELINE="${NG_WINDOWS_RESTORE_BASELINE_VCPKG:-1}"
 REQUIRE_DAWN="${NG_WINDOWS_REQUIRE_DAWN:-${NG_WINDOWS_ENABLE_WEBGPU:-0}}"
@@ -84,11 +79,6 @@ PING="$(aws ssm describe-instance-information \
   exit 3
 }
 
-if [[ "$CHECK_ONLY" == "1" ]]; then
-  echo "$PING"
-  exit 0
-fi
-
 SCRIPT_PATH="$SCRIPT_DIR/setup-deps.ps1"
 [[ -f "$SCRIPT_PATH" ]] || {
   echo "Missing Windows provision script: $SCRIPT_PATH" >&2
@@ -96,6 +86,7 @@ SCRIPT_PATH="$SCRIPT_DIR/setup-deps.ps1"
 }
 
 SCRIPT_URI="$("$NG_ROOT/scripts/upload-artifact.sh" "$SCRIPT_PATH" "$PROVISION_S3" | tail -1)"
+log "Installing Windows build dependencies on $INSTANCE_ID via $SCRIPT_PATH"
 
 REMOTE_SCRIPT_WIN="${BOOTSTRAP//\//\\}\\setup-deps.ps1"
 PS_ARGS=(

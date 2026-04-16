@@ -75,18 +75,25 @@ function activeBuildsFromMarkerFiles() {
     const id = env[idKey];
     if (!id) return [];
     const request = { env, platformEnv: { [platform]: env }, external: true };
+    const inferred = inferExternalBuildStatusFromLog(id, platform);
+    const logFile = existsSync(join(logDir, `${id}-${platform}.service.log`))
+      ? join(logDir, `${id}-${platform}.service.log`)
+      : join(logDir, `${id}-${platform}.log`);
     return [{
       id,
-      status: 'running',
-      reason: `external ${platform} build`,
+      status: inferred.status,
+      reason: `external ${platform} build (marker file; ${inferred.detail})`,
       createdAt: null,
       updatedAt: now(),
       external: true,
+      externalMarker: true,
+      externalInference: inferred.detail,
       platforms: [{
         name: platform,
-        status: 'running',
+        status: inferred.status,
         external: true,
-        log: existsSync(join(logDir, `${id}-${platform}.service.log`)) ? join(logDir, `${id}-${platform}.service.log`) : join(logDir, `${id}-${platform}.log`),
+        externalInference: inferred.detail,
+        log: logFile,
         artifactPrefix: artifactPrefixForPlatform(id, platform, request),
         workdir: env[`${platform.toUpperCase()}_BUILD_POLL_WORKDIR`],
         ssmCommandId: env[`${platform.toUpperCase()}_SSM_COMMAND_ID`]
@@ -96,11 +103,29 @@ function activeBuildsFromMarkerFiles() {
   });
 }
 
+function mergeMarkerBuildsById(markerBuilds) {
+  const rank = (s) => ({ failed: 4, cancelled: 4, running: 3, unknown: 2, succeeded: 1 }[s] ?? 0);
+  const pick = (a, b) => (rank(a) >= rank(b) ? a : b);
+  const byId = new Map();
+  for (const build of markerBuilds) {
+    const prev = byId.get(build.id);
+    if (!prev) {
+      byId.set(build.id, { ...build, platforms: [...(build.platforms || [])] });
+      continue;
+    }
+    prev.platforms = [...(prev.platforms || []), ...(build.platforms || [])];
+    prev.status = pick(prev.status, build.status);
+    prev.reason = [prev.reason, build.reason].filter(Boolean).join(' · ');
+    prev.updatedAt = now();
+  }
+  return [...byId.values()];
+}
+
 function loadBuilds() {
   const state = loadState();
   const builds = [...(state.builds || [])];
   const known = new Set(builds.map((build) => build.id));
-  for (const build of activeBuildsFromMarkerFiles()) {
+  for (const build of mergeMarkerBuildsById(activeBuildsFromMarkerFiles())) {
     if (!known.has(build.id)) builds.unshift(build);
   }
   return builds;
@@ -364,7 +389,7 @@ function requestUrl(url) {
 }
 
 function tailTextFile(path, lineCount) {
-  const lines = Math.max(1, Math.min(Number(lineCount) || 200, 5000));
+  const lines = Math.max(1, Math.min(Number(lineCount) || 200, 15000));
   const stats = statSync(path);
   const bytesToRead = Math.min(stats.size, Math.max(64 * 1024, lines * 300));
   const buffer = Buffer.alloc(bytesToRead);
@@ -375,6 +400,57 @@ function tailTextFile(path, lineCount) {
     closeSync(fd);
   }
   return buffer.toString('utf8').split(/\r?\n/).slice(-lines).join('\n');
+}
+
+/**
+ * Marker-file builds (remote SSM) are injected even after completion because
+ * WINDOWS_ACTIVE_BUILD.env / MACOS_ACTIVE_BUILD.env may linger. Infer terminal
+ * status from the orchestrator tee log on this host (no build-script changes).
+ */
+function inferExternalBuildStatusFromLog(id, platform) {
+  const serviceLogPath = join(logDir, `${id}-${platform}.service.log`);
+  const directLogPath = join(logDir, `${id}-${platform}.log`);
+  const logPath = existsSync(serviceLogPath) ? serviceLogPath : directLogPath;
+  if (!existsSync(logPath)) {
+    return { status: 'unknown', detail: 'no orchestrator log file yet', logPath: null };
+  }
+  let text;
+  try {
+    const stats = statSync(logPath);
+    const n = Math.min(stats.size, 384 * 1024);
+    const buf = Buffer.alloc(n);
+    const fd = openSync(logPath, 'r');
+    try {
+      readSync(fd, buf, 0, n, stats.size - n);
+    } finally {
+      closeSync(fd);
+    }
+    text = buf.toString('utf8');
+  } catch (e) {
+    return { status: 'unknown', detail: `log read failed: ${e.message}`, logPath };
+  }
+
+  const failed = /remote build FAILED|BUILD_FAILED\.txt|Timed out waiting for BUILD_DONE|ninja: build stopped: subcommand failed|marker poll unexpected|bootstrap SSM failure/i.test(
+    text
+  );
+  const ok =
+    /marker poll OK|remote build completed|checkpoint\.sh.*completed|windows remote build completed|macos remote build completed/i.test(text) ||
+    /BUILD_DONE\.txt/i.test(text);
+
+  if (failed && ok) return { status: 'failed', detail: 'log contains both success and failure markers; treating as failed', logPath };
+  if (failed) return { status: 'failed', detail: 'inferred from orchestrator log', logPath };
+  if (ok) return { status: 'succeeded', detail: 'inferred from orchestrator log', logPath };
+
+  try {
+    const ageMs = Date.now() - statSync(logPath).mtimeMs;
+    if (ageMs > 48 * 60 * 60 * 1000) {
+      return { status: 'unknown', detail: 'log idle >48h with no terminal pattern; refresh markers or open log', logPath };
+    }
+  } catch {
+    // ignore
+  }
+
+  return { status: 'running', detail: 'no terminal pattern in log tail yet', logPath };
 }
 
 const server = http.createServer(async (req, res) => {
