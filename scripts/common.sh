@@ -41,7 +41,7 @@ build_id() {
 _ng_ssm_poll_build_markers() {
   local workdir="$1" instance="$2" region="$3" doc_name="$4"
   local max_seconds="${5:-172800}" interval="${6:-90}"
-  local params_file params_abs deadline poll_cid inv out first status second third
+  local params_file params_abs deadline poll_cid inv out first status second third fourth
   local workdir_hash running_polls=0
   workdir_hash="$(printf '%s' "$workdir" | md5sum | awk '{print $1}')"
 
@@ -66,6 +66,7 @@ if (Test-Path (Join-Path $d 'BUILD_DONE.txt')) {
   $art = Join-Path $d 'artifacts'
   if (Test-Path $art) { Write-Output 'ARTIFACTS_OK' } else { Write-Output 'ARTIFACTS_MISSING' }
   $compileLine = 'COMPILE_OK'
+  $progressLine = ''
   $snip = ''
   $parts = New-Object System.Collections.Generic.List[string]
   if (Test-Path $art) {
@@ -73,6 +74,8 @@ if (Test-Path (Join-Path $d 'BUILD_DONE.txt')) {
     if ($null -ne $lg) {
       $t = @(Get-Content $lg.FullName -Tail 220 -ErrorAction SilentlyContinue)
       if ($t.Count -gt 0) { [void]$parts.Add(($t -join [char]10)) }
+      $progress = @($t | Where-Object { $_ -match '^\\[[0-9]+/[0-9]+\\]' } | Select-Object -Last 1)
+      if ($progress.Count -gt 0) { $progressLine = $progress[0] }
     }
   }
   $wo = Join-Path $d 'worker-output.log'
@@ -95,6 +98,7 @@ if (Test-Path (Join-Path $d 'BUILD_DONE.txt')) {
     }
   }
   Write-Output $compileLine
+  if ($progressLine.Length -gt 0) { Write-Output $progressLine } else { Write-Output 'PROGRESS_UNKNOWN' }
   if ($compileLine -eq 'COMPILE_FAILED') { Write-Output $snip }
 }
 """.replace("__WD__", wd)
@@ -143,7 +147,8 @@ PY
     first="$(echo "$out" | head -n1 | tr -d '\r')"
     second="$(echo "$out" | sed -n '2p' | tr -d '\r')"
     third="$(echo "$out" | sed -n '3p' | tr -d '\r')"
-    log "Marker poll $poll_cid status=$status first=$first second=${second:-} third=${third:-}"
+    fourth="$(echo "$out" | sed -n '4p' | tr -d '\r')"
+    log "Marker poll $poll_cid status=$status first=$first second=${second:-} third=${third:-} fourth=${fourth:-}"
     case "$first" in
       DONE)
         log "Remote build finished successfully."
@@ -164,7 +169,7 @@ PY
         if [[ "$doc_name" == "AWS-RunPowerShellScript" && "$third" == "COMPILE_FAILED" ]]; then
           guard="$NG_ARTIFACT_DIR/.ng-alerted-build-stderr-$workdir_hash"
           if [[ ! -f "$guard" ]]; then
-            snippet="$(echo "$out" | sed -n '4,$p')"
+            snippet="$(echo "$out" | sed -n '5,$p')"
             "$NG_ROOT/scripts/notify.sh" \
               "ng-webkit Windows: build log / worker log shows FAILURE (stderr patterns) workdir=$workdir poll=$poll_cid" \
               "$(printf '%s\n' "$snippet" | head -c 14000)"
@@ -226,4 +231,3 @@ ng_macos_ssm_poll_build_markers() {
   local interval="${MACOS_BUILD_POLL_INTERVAL:-90}"
   _ng_ssm_poll_build_markers "$workdir" "$instance" "$region" "AWS-RunShellScript" "$max_seconds" "$interval"
 }
-
