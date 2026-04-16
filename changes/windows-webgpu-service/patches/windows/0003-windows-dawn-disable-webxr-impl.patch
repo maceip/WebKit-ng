@@ -1,0 +1,31 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+index ddf71eb0d5b..54df2cfc55d 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+@@ -103,7 +103,11 @@ void DeviceImpl::destroy()
+ 
+ RefPtr<XRBinding> DeviceImpl::createXRBinding()
+ {
++#if PLATFORM(WIN)
++    return nullptr;
++#else
+     return XRBindingImpl::create(adoptWebGPU(wgpuDeviceCreateXRBinding(m_backing.get())), m_convertToBackingContext);
++#endif
+ }
+ 
+ RefPtr<Buffer> DeviceImpl::createBuffer(const BufferDescriptor& descriptor)
+diff --git a/Source/WebCore/Sources.txt b/Source/WebCore/Sources.txt
+index 544e39fd3ce..d830e0379cf 100644
+--- a/Source/WebCore/Sources.txt
++++ b/Source/WebCore/Sources.txt
+@@ -84,10 +84,6 @@ Modules/WebGPU/Implementation/WebGPUSamplerImpl.cpp
+ Modules/WebGPU/Implementation/WebGPUShaderModuleImpl.cpp
+ Modules/WebGPU/Implementation/WebGPUTextureImpl.cpp
+ Modules/WebGPU/Implementation/WebGPUTextureViewImpl.cpp
+-Modules/WebGPU/Implementation/WebGPUXRBindingImpl.cpp
+-Modules/WebGPU/Implementation/WebGPUXRProjectionLayerImpl.cpp
+-Modules/WebGPU/Implementation/WebGPUXRSubImageImpl.cpp
+-Modules/WebGPU/Implementation/WebGPUXRViewImpl.cpp
+ Modules/WebGPU/WGSLLanguageFeatures.cpp
+ Modules/airplay/WebKitPlaybackTargetAvailabilityEvent.cpp
+ Modules/applicationmanifest/ApplicationManifestParser.cpp

@@ -1,9 +1,9 @@
 diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
 new file mode 100644
-index 00000000000..62b012d7402
+index 00000000000..67571fd5236
 --- /dev/null
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,170 @@
 +/*
 + * Copyright (C) 2026 Apple Inc. All rights reserved.
 + *
@@ -57,6 +57,8 @@ index 00000000000..62b012d7402
 +    WGPUColorSpace_SRGB = 0x00000001,
 +    WGPUColorSpace_Force32 = 0x7FFFFFFF
 +} WGPUColorSpace;
++
++using WGPUTextureUsageFlags = WGPUTextureUsage;
 +
 +typedef enum WGPUBufferBindingTypeExtended {
 +    WGPUBufferBindingType_Float3x2 = WGPUBufferBindingType_Force32 - 1,
