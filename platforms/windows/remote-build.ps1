@@ -26,7 +26,6 @@ function Test-Git {
   $output = & git @args 2>&1
   $exitCode = $LASTEXITCODE
   $ErrorActionPreference = $prev
-  if ($output) { $output | ForEach-Object { Write-Host $_ } }
   return ($exitCode -eq 0)
 }
 
