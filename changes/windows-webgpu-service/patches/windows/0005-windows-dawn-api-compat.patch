@@ -1026,6 +1026,27 @@ diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU
  }
  
  } // namespace WebCore::WebGPU
+diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 11:51:32.007705221 +0000
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUConvertToBackingContext.cpp	2026-04-16 16:22:12.516648653 +0000
+@@ -223,9 +223,17 @@
+     case FeatureName::Float32Filterable:
+         return WGPUFeatureName_Float32Filterable;
+     case FeatureName::Float16Renderable:
++#if PLATFORM(WIN)
++        return WGPUFeatureName_Undefined;
++#else
+         return WGPUFeatureName_Float16Renderable;
++#endif
+     case FeatureName::Float32Renderable:
++#if PLATFORM(WIN)
++        return WGPUFeatureName_Undefined;
++#else
+         return WGPUFeatureName_Float32Renderable;
++#endif
+     case FeatureName::Float32Blendable:
+         return WGPUFeatureName_Float32Blendable;
+     case FeatureName::ClipDistances:
 diff -ruN '--exclude=.git' a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:51:32.854912098 +0000
 +++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp	2026-04-16 11:27:02.480552679 +0000
