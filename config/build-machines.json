@@ -10,7 +10,7 @@
       "regionEnv": "AWS_REGION",
       "defaultRegion": "eu-west-1",
       "instanceIdEnv": "NG_WINDOWS_INSTANCE_ID",
-      "defaultInstanceId": "i-0d254760fe07c5e9f",
+      "defaultInstanceId": "i-05ab9a8ed6d325b3d",
       "dependencyRoot": "C:\\Bootstrap\\ng-deps"
     },
     "macos": {
@@ -23,4 +23,3 @@
     }
   }
 }
-

@@ -128,10 +128,10 @@ Important defaults on this machine:
 - `NG_ANDROID_SOURCE=/home/ubuntu/webkit/wpe-android`
 - `NG_WINDOWS_ARTIFACT_S3=s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows`
 
-Windows SSM is prefilled for the successful build machine:
+Windows SSM is prefilled for the replacement build machine:
 
-- instance `i-0d254760fe07c5e9f`
-- name `webkit-win-build-20260412`
+- instance `i-05ab9a8ed6d325b3d`
+- name `webkit-win-build-replacement-20260416`
 - region `eu-west-1`
 - source `C:\Work\WebKit`
 - output `C:\Work\WebKit\WebKitBuild\Release`

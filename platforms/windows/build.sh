@@ -9,7 +9,7 @@ load_env
 
 ID="${1:-$(build_id)}"
 REGION="${AWS_REGION:-eu-west-1}"
-INSTANCE_ID="${NG_WINDOWS_INSTANCE_ID:-i-0d254760fe07c5e9f}"
+INSTANCE_ID="${NG_WINDOWS_INSTANCE_ID:-i-05ab9a8ed6d325b3d}"
 WORKDIR="${NG_WINDOWS_WORKDIR:-C:/Bootstrap/ng-webkit-$ID}"
 S3_PREFIX="${NG_WINDOWS_ARTIFACT_S3:-${NG_ARTIFACT_BUCKET:-s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit}/windows/$ID}"
 BOOTSTRAP="${NG_WINDOWS_BOOTSTRAP:-C:/Bootstrap}"
