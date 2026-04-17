@@ -1,0 +1,20 @@
+diff --git a/Tools/MiniBrowser/win/MainWindow.h b/Tools/MiniBrowser/win/MainWindow.h
+index 65e6a99d9e3b..a51956349572 100644
+--- a/Tools/MiniBrowser/win/MainWindow.h
++++ b/Tools/MiniBrowser/win/MainWindow.h
+@@ -51,6 +51,7 @@ public:
+     void setVerticalTabsCollapsed(bool);
+ 
+     static bool isInstance(HWND);
++    static void applyModernMaterialsToDialog(HWND);
+     
+ private:
+     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+@@ -72,7 +73,6 @@ private:
+     void resizeToolbar(int);
+     void rescaleToolbar();
+     void applyModernMaterials();
+-    static void applyModernMaterialsToDialog(HWND);
+     void createModernMaterialBrushes();
+     void destroyModernMaterialBrushes();
+     HBRUSH toolbarBackgroundBrush();
