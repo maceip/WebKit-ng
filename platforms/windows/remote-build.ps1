@@ -351,7 +351,12 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
   $ninjaFile = Join-Path $out "build.ninja"
   $cacheText = Get-Content $cache -Raw
   $ninjaText = if (Test-Path $ninjaFile) { Get-Content $ninjaFile -Raw } else { "" }
-  $sccacheStats = if (Test-Path $logFile) { Get-Content $logFile -Tail 80 | Where-Object { $_ -match '^Compile requests\s+' } | Select-Object -Last 1 } else { $null }
+  $sccacheLogTail = if (Test-Path $logFile) { @(Get-Content $logFile -Tail 120 | ForEach-Object { [string]$_ }) } else { @() }
+  $sccacheStats = $sccacheLogTail | Where-Object { $_ -match '^Compile requests\s+[0-9]+\s*$' } | Select-Object -Last 1
+  $sccacheExecutedStats = $sccacheLogTail | Where-Object { $_ -match '^Compile requests executed\s+[0-9]+\s*$' } | Select-Object -Last 1
+  $sccacheHitStats = $sccacheLogTail | Where-Object { $_ -match '^Cache hits\s+[0-9]+\s*$' } | Select-Object -Last 1
+  $sccacheMissStats = $sccacheLogTail | Where-Object { $_ -match '^Cache misses\s+[0-9]+\s*$' } | Select-Object -Last 1
+  $sccacheHitRateStats = $sccacheLogTail | Where-Object { $_ -match '^Cache hits rate\s+' } | Select-Object -Last 1
   $normalizedSccacheExe = $config.sccacheExe.Replace('\', '/')
   $sccacheExeName = Split-Path -Leaf $config.sccacheExe
   $normalizedCacheText = $cacheText.Replace('\', '/')
@@ -362,6 +367,18 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
   if ($sccacheStats -match '^Compile requests\s+([0-9]+)\s*$') {
     $requests = [int]$Matches[1]
   }
+  $requestsExecuted = $null
+  if ($sccacheExecutedStats -match '^Compile requests executed\s+([0-9]+)\s*$') {
+    $requestsExecuted = [int]$Matches[1]
+  }
+  $cacheHits = $null
+  if ($sccacheHitStats -match '^Cache hits\s+([0-9]+)\s*$') {
+    $cacheHits = [int]$Matches[1]
+  }
+  $cacheMisses = $null
+  if ($sccacheMissStats -match '^Cache misses\s+([0-9]+)\s*$') {
+    $cacheMisses = [int]$Matches[1]
+  }
   $sccacheReport = [ordered]@{
     requested = $true
     exe = $config.sccacheExe
@@ -369,6 +386,10 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
     cmakeCacheHasLauncher = $cacheHasLauncher
     ninjaHasLauncher = $ninjaHasLauncher
     compileRequests = $requests
+    compileRequestsExecuted = $requestsExecuted
+    cacheHits = $cacheHits
+    cacheMisses = $cacheMisses
+    cacheHitsRate = $sccacheHitRateStats
     statsLine = $sccacheStats
   }
   $sccacheReport | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $artDir "sccache-report.json") -Encoding UTF8
@@ -378,7 +399,7 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
   if (-not $ninjaHasLauncher) {
     throw "sccache was requested but build.ninja does not invoke $($config.sccacheExe)."
   }
-  if ($sccacheStats -match '^Compile requests\s+0\s*$') {
+  if ($requests -eq 0 -or ($null -eq $requests -and $requestsExecuted -eq 0)) {
     throw "sccache was requested and configured but recorded zero compile requests. This build was effectively cold."
   }
 }
