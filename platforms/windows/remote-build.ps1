@@ -352,8 +352,12 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
   $cacheText = Get-Content $cache -Raw
   $ninjaText = if (Test-Path $ninjaFile) { Get-Content $ninjaFile -Raw } else { "" }
   $sccacheStats = if (Test-Path $logFile) { Get-Content $logFile -Tail 80 | Where-Object { $_ -match '^Compile requests\s+' } | Select-Object -Last 1 } else { $null }
-  $cacheHasLauncher = $cacheText -match 'CMAKE_C_COMPILER_LAUNCHER' -and $cacheText -match 'CMAKE_CXX_COMPILER_LAUNCHER' -and $cacheText -match [regex]::Escape($config.sccacheExe)
-  $ninjaHasLauncher = $ninjaText -match [regex]::Escape($config.sccacheExe)
+  $normalizedSccacheExe = $config.sccacheExe.Replace('\', '/')
+  $sccacheExeName = Split-Path -Leaf $config.sccacheExe
+  $normalizedCacheText = $cacheText.Replace('\', '/')
+  $normalizedNinjaText = $ninjaText.Replace('\', '/')
+  $cacheHasLauncher = $cacheText -match 'CMAKE_C_COMPILER_LAUNCHER' -and $cacheText -match 'CMAKE_CXX_COMPILER_LAUNCHER' -and ($normalizedCacheText -match [regex]::Escape($normalizedSccacheExe) -or $cacheText -match [regex]::Escape($sccacheExeName))
+  $ninjaHasLauncher = $normalizedNinjaText -match [regex]::Escape($normalizedSccacheExe) -or $ninjaText -match [regex]::Escape($sccacheExeName)
   $requests = $null
   if ($sccacheStats -match '^Compile requests\s+([0-9]+)\s*$') {
     $requests = [int]$Matches[1]
