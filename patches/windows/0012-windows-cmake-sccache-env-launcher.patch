@@ -1,0 +1,20 @@
+diff --git a/Source/cmake/OptionsWin.cmake b/Source/cmake/OptionsWin.cmake
+--- a/Source/cmake/OptionsWin.cmake
++++ b/Source/cmake/OptionsWin.cmake
+@@ -1,5 +1,15 @@
+ if (MSVC)
+     include(OptionsMSVC)
+ endif ()
++
++# ng-webkit Windows builders run WebKit's Perl wrapper before CMake. Some
++# wrapper paths lose CMAKE_*_COMPILER_LAUNCHER command-line values, which makes
++# sccache silently cold. Let the runner provide the launcher through the
++# environment and force it into the cache before WebKit targets are created.
++if (DEFINED ENV{NG_SCCACHE_EXE} AND NOT "$ENV{NG_SCCACHE_EXE}" STREQUAL "")
++    set(CMAKE_C_COMPILER_LAUNCHER "$ENV{NG_SCCACHE_EXE}" CACHE FILEPATH "C compiler launcher" FORCE)
++    set(CMAKE_CXX_COMPILER_LAUNCHER "$ENV{NG_SCCACHE_EXE}" CACHE FILEPATH "CXX compiler launcher" FORCE)
++    message(STATUS "ng-webkit Windows sccache launcher: $ENV{NG_SCCACHE_EXE}")
++endif ()
+ 
+ # Define minimum supported Windows version
+ # https://msdn.microsoft.com/en-us/library/6sehtctf.aspx

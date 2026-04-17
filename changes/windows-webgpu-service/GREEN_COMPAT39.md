@@ -84,6 +84,7 @@ Root Windows patches:
 - `patches/windows/0009-windows-webgpu-device-unused-helpers.patch`
 - `patches/windows/0010-windows-build-webkit-pass-ninja-makeargs.patch`
 - `patches/windows/0011-windows-strip-release-debug-info.patch`
+- `patches/windows/0012-windows-cmake-sccache-env-launcher.patch`
 
 Future bundles include `patch-manifest.json` so the exact applied patch list and hashes travel with the build artifacts.
 
@@ -97,7 +98,7 @@ Cache hits 0
 Cache misses 0
 ```
 
-Do not assume rebuilds are cached until `build.ninja` or sccache stats prove it. The runner now copies `patch-manifest.json` into artifacts and warns if a build requested sccache but recorded zero compile requests.
+Do not assume rebuilds are cached until `build.ninja` or sccache stats prove it. The runner now copies `patch-manifest.json`, writes `sccache-report.json`, and fails a requested-sccache build if `CMakeCache.txt` / `build.ninja` do not contain the launcher or if a clean build records zero compile requests.
 
 ## Recovery Checklist
 

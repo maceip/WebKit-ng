@@ -200,11 +200,11 @@ Cache misses 0
 ```
 
 The generated CMake cache had direct `clang-cl.exe` compilers and no
-`CMAKE_C_COMPILER_LAUNCHER` / `CMAKE_CXX_COMPILER_LAUNCHER` entries. Until the
-runner proves generated Ninja rules include `sccache.exe`, cache is not part of
-the acceptance story. CMake supports `CMAKE_<LANG>_COMPILER_LAUNCHER`, but our
-WebKit Windows wrapper path still needs a verified handoff into the generated
-build directory.
+`CMAKE_C_COMPILER_LAUNCHER` / `CMAKE_CXX_COMPILER_LAUNCHER` entries.
+`patches/windows/0012-windows-cmake-sccache-env-launcher.patch` makes the Win
+CMake path honor `NG_SCCACHE_EXE`, and `remote-build.ps1` now writes
+`sccache-report.json` and fails a requested-sccache build unless both
+`CMakeCache.txt` and `build.ninja` contain the launcher.
 
 ## Worker Hang Avoidance
 

@@ -170,6 +170,7 @@ function Invoke-BuildCmd {
     [void]$lines.Add("set `"SCCACHE_DIR=$($config.sccacheDir)`"")
     [void]$lines.Add("set `"SCCACHE_CACHE_SIZE=50G`"")
     [void]$lines.Add("set `"SCCACHE_IDLE_TIMEOUT=0`"")
+    [void]$lines.Add("set `"NG_SCCACHE_EXE=$($config.sccacheExe)`"")
     [void]$lines.Add("`"$($config.sccacheExe)`" --zero-stats >> `"$logFile`" 2>&1")
   }
   [void]$lines.Add("cd /d `"$WorkingDir`"")
@@ -337,9 +338,34 @@ if (-not (Test-Path $cache)) {
 
 if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.enableSccache) {
   $logFile = Join-Path $artDir ("build-webkit-" + $config.buildId + ".log")
+  $ninjaFile = Join-Path $out "build.ninja"
+  $cacheText = Get-Content $cache -Raw
+  $ninjaText = if (Test-Path $ninjaFile) { Get-Content $ninjaFile -Raw } else { "" }
   $sccacheStats = if (Test-Path $logFile) { Get-Content $logFile -Tail 80 | Where-Object { $_ -match '^Compile requests\s+' } | Select-Object -Last 1 } else { $null }
+  $cacheHasLauncher = $cacheText -match 'CMAKE_C_COMPILER_LAUNCHER' -and $cacheText -match 'CMAKE_CXX_COMPILER_LAUNCHER' -and $cacheText -match [regex]::Escape($config.sccacheExe)
+  $ninjaHasLauncher = $ninjaText -match [regex]::Escape($config.sccacheExe)
+  $requests = $null
+  if ($sccacheStats -match '^Compile requests\s+([0-9]+)\s*$') {
+    $requests = [int]$Matches[1]
+  }
+  $sccacheReport = [ordered]@{
+    requested = $true
+    exe = $config.sccacheExe
+    cacheDir = $config.sccacheDir
+    cmakeCacheHasLauncher = $cacheHasLauncher
+    ninjaHasLauncher = $ninjaHasLauncher
+    compileRequests = $requests
+    statsLine = $sccacheStats
+  }
+  $sccacheReport | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $artDir "sccache-report.json") -Encoding UTF8
+  if (-not $cacheHasLauncher) {
+    throw "sccache was requested but CMakeCache.txt does not contain CMAKE_*_COMPILER_LAUNCHER=$($config.sccacheExe)."
+  }
+  if (-not $ninjaHasLauncher) {
+    throw "sccache was requested but build.ninja does not invoke $($config.sccacheExe)."
+  }
   if ($sccacheStats -match '^Compile requests\s+0\s*$') {
-    Write-Host "WARNING: sccache was requested but recorded zero compile requests. This build was effectively cold."
+    throw "sccache was requested and configured but recorded zero compile requests. This build was effectively cold."
   }
 }
 
