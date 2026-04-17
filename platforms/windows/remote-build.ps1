@@ -239,6 +239,15 @@ function Invoke-BuildCmd {
   }
 }
 
+function Enable-SymlinkEvaluation {
+  Write-Host "Ensuring Windows symlink evaluation is enabled for WebKit generated headers"
+  $cmd = "fsutil behavior set SymlinkEvaluation L2L:1 L2R:1 R2L:1 R2R:1"
+  $setOutput = & cmd.exe /c $cmd 2>&1
+  $setOutput | ForEach-Object { Write-Host $_ }
+  $queryOutput = & cmd.exe /c "fsutil behavior query SymlinkEvaluation" 2>&1
+  $queryOutput | ForEach-Object { Write-Host $_ }
+}
+
 $patchRoot = Join-Path $here "patches"
 $commonPatches = @(Get-ChildItem (Join-Path $patchRoot "common") -Filter *.patch -ErrorAction SilentlyContinue | Sort-Object Name)
 $winPatches = @(Get-ChildItem (Join-Path $patchRoot "windows") -Filter *.patch -ErrorAction SilentlyContinue | Sort-Object Name)
@@ -324,6 +333,7 @@ if (Test-Path $buildDir) {
   Remove-Item -Recurse -Force $buildDir
 }
 
+Enable-SymlinkEvaluation
 Invoke-BuildCmd -VsDevCmd $config.vsDevCmdPath -WorkingDir $source -CmdLine $config.buildCommandLine
 
 $out = $config.outputDir
