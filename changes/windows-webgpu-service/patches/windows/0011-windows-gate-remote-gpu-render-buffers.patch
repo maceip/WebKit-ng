@@ -1,0 +1,13 @@
+diff --git a/Source/WebKit/GPUProcess/graphics/WebGPU/RemoteGPU.h b/Source/WebKit/GPUProcess/graphics/WebGPU/RemoteGPU.h
+--- a/Source/WebKit/GPUProcess/graphics/WebGPU/RemoteGPU.h
++++ b/Source/WebKit/GPUProcess/graphics/WebGPU/RemoteGPU.h
+@@ -101,7 +101,9 @@ public:
+     void paintNativeImageToImageBuffer(WebCore::NativeImage&, WebCore::RenderingResourceIdentifier);
+     RefPtr<GPUConnectionToWebProcess> gpuConnectionToWebProcess() const;
+ 
++#if ENABLE(GPU_PROCESS_MODEL)
+     static Vector<UniqueRef<WebCore::IOSurface>> createRenderBuffers(unsigned width, unsigned height, const WebCore::ProcessIdentity&);
++#endif
+     IPC::StreamConnectionWorkQueue& workQueue() const { return m_workQueue; }
+ 
+ private:

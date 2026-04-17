@@ -1,0 +1,42 @@
+diff --git a/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.cpp b/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.cpp
+--- a/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.cpp
++++ b/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.cpp
+@@ -221,9 +221,9 @@ void RemoteGPUProxy::requestAdapter(const WebCore::WebGPU::RequestAdapterOptions
+     callback(WebGPU::RemoteAdapterProxy::create(WTF::move(response->name), WTF::move(resultSupportedFeatures), WTF::move(resultSupportedLimits), response->isFallbackAdapter, options.xrCompatible, *this, m_convertToBackingContext, identifier));
+ }
+ 
++#if ENABLE(GPU_PROCESS_MODEL)
+ RefPtr<WebKit::Mesh> RemoteGPUProxy::createModelBacking(unsigned width, unsigned height, const WebModel::ImageAsset& diffuseTexture, const WebModel::ImageAsset& specularTexture, CompletionHandler<void(Vector<MachSendRight>&&)>&& callback)
+ {
+-#if ENABLE(GPU_PROCESS_MODEL)
+     auto identifier = WebModelIdentifier::generate();
+ 
+     auto sendResult = sendSync(Messages::RemoteGPU::CreateModelBacking(width, height, diffuseTexture, specularTexture, identifier));
+@@ -240,13 +240,8 @@ RefPtr<WebKit::Mesh> RemoteGPUProxy::createModelBacking(unsigned width, unsigned
+     auto result = RemoteMeshProxy::create(root(), m_modelConvertToBackingContext, identifier);
+     result->setLabel("Placeholder model label"_s);
+     return result;
+-#else
+-    UNUSED_PARAM(width);
+-    UNUSED_PARAM(height);
+-    UNUSED_PARAM(callback);
+-    return nullptr;
+-#endif
+ }
++#endif
+ 
+ RefPtr<WebCore::WebGPU::PresentationContext> RemoteGPUProxy::createPresentationContext(const WebCore::WebGPU::PresentationContextDescriptor& descriptor)
+ {
+diff --git a/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.h b/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.h
+--- a/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.h
++++ b/Source/WebKit/WebProcess/GPU/graphics/WebGPU/RemoteGPUProxy.h
+@@ -77,7 +77,9 @@ public:
+ 
+     void paintToCanvas(WebCore::NativeImage&, const WebCore::IntSize&, WebCore::GraphicsContext&) final;
+     WebGPUIdentifier backing() const { return m_backing; }
++#if ENABLE(GPU_PROCESS_MODEL)
+     RefPtr<WebKit::Mesh> NODELETE createModelBacking(unsigned width, unsigned height, const WebModel::ImageAsset& diffuseTexture, const WebModel::ImageAsset& specularTexture, CompletionHandler<void(Vector<MachSendRight>&&)>&&);
++#endif
+ 
+ private:
+     friend class WebGPU::DowncastConvertToBackingContext;
