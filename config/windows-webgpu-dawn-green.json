@@ -25,7 +25,8 @@
     "webxr": false,
     "thinLto": true,
     "linker": "lld-link",
-    "releaseDebugInfo": "stripped"
+    "releaseDebugInfo": "embedded",
+    "msvcDebugInformationFormat": "Embedded"
   },
   "enabledChanges": [
     "windows-webgpu-service",
@@ -35,6 +36,6 @@
   "notes": [
     "Future build bundles include patch-manifest.json with exact patch names and SHA256 hashes.",
     "The green build completed at -j4. The repeat lane now defaults to -j8 on the 128 GiB Windows shape.",
-    "The green build completed without effective sccache; fix cache plumbing before expecting fast retries."
+    "Sccache is verified through CMakeCache.txt, build.ninja, and sccache-report.json. The repeat lane forces CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded for cacheable MSVC object debug info."
   ]
 }

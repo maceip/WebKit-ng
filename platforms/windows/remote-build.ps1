@@ -363,6 +363,7 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
   $normalizedNinjaText = $ninjaText.Replace('\', '/')
   $cacheHasLauncher = $cacheText -match 'CMAKE_C_COMPILER_LAUNCHER' -and $cacheText -match 'CMAKE_CXX_COMPILER_LAUNCHER' -and ($normalizedCacheText -match [regex]::Escape($normalizedSccacheExe) -or $cacheText -match [regex]::Escape($sccacheExeName))
   $ninjaHasLauncher = $normalizedNinjaText -match [regex]::Escape($normalizedSccacheExe) -or $ninjaText -match [regex]::Escape($sccacheExeName)
+  $cacheHasEmbeddedDebugInfo = $cacheText -match 'CMAKE_MSVC_DEBUG_INFORMATION_FORMAT(:[A-Z]+)?=Embedded'
   $requests = $null
   if ($sccacheStats -match '^Compile requests\s+([0-9]+)\s*$') {
     $requests = [int]$Matches[1]
@@ -385,6 +386,7 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
     cacheDir = $config.sccacheDir
     cmakeCacheHasLauncher = $cacheHasLauncher
     ninjaHasLauncher = $ninjaHasLauncher
+    cmakeCacheHasEmbeddedDebugInfo = $cacheHasEmbeddedDebugInfo
     compileRequests = $requests
     compileRequestsExecuted = $requestsExecuted
     cacheHits = $cacheHits
@@ -398,6 +400,9 @@ if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.en
   }
   if (-not $ninjaHasLauncher) {
     throw "sccache was requested but build.ninja does not invoke $($config.sccacheExe)."
+  }
+  if (-not $cacheHasEmbeddedDebugInfo) {
+    throw "sccache was requested but CMakeCache.txt does not contain CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded."
   }
   if ($requests -eq 0 -or ($null -eq $requests -and $requestsExecuted -eq 0)) {
     throw "sccache was requested and configured but recorded zero compile requests. This build was effectively cold."

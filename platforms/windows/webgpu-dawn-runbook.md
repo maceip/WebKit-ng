@@ -191,7 +191,7 @@ presentation.
 
 ## Sccache Reality Check
 
-The green run requested sccache but produced:
+The original green run requested sccache but produced:
 
 ```text
 Compile requests 0
@@ -202,9 +202,16 @@ Cache misses 0
 The generated CMake cache had direct `clang-cl.exe` compilers and no
 `CMAKE_C_COMPILER_LAUNCHER` / `CMAKE_CXX_COMPILER_LAUNCHER` entries.
 `patches/windows/0012-windows-cmake-sccache-env-launcher.patch` makes the Win
-CMake path honor `NG_SCCACHE_EXE`, and `remote-build.ps1` now writes
-`sccache-report.json` and fails a requested-sccache build unless both
-`CMakeCache.txt` and `build.ninja` contain the launcher.
+CMake path honor `NG_SCCACHE_EXE`, forces
+`CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded` for `/Z7`-style cacheable debug
+info, and `remote-build.ps1` now writes `sccache-report.json`.
+
+Requested-sccache builds fail unless:
+
+- `CMakeCache.txt` contains both compiler launcher entries
+- `build.ninja` invokes `sccache.exe`
+- `CMakeCache.txt` contains `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded`
+- sccache records nonzero compile activity
 
 ## Worker Hang Avoidance
 

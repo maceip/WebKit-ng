@@ -1,7 +1,7 @@
 diff --git a/Source/cmake/OptionsWin.cmake b/Source/cmake/OptionsWin.cmake
 --- a/Source/cmake/OptionsWin.cmake
 +++ b/Source/cmake/OptionsWin.cmake
-@@ -1,5 +1,15 @@
+@@ -1,5 +1,17 @@
  if (MSVC)
      include(OptionsMSVC)
  endif ()
@@ -13,7 +13,9 @@ diff --git a/Source/cmake/OptionsWin.cmake b/Source/cmake/OptionsWin.cmake
 +if (DEFINED ENV{NG_SCCACHE_EXE} AND NOT "$ENV{NG_SCCACHE_EXE}" STREQUAL "")
 +    set(CMAKE_C_COMPILER_LAUNCHER "$ENV{NG_SCCACHE_EXE}" CACHE FILEPATH "C compiler launcher" FORCE)
 +    set(CMAKE_CXX_COMPILER_LAUNCHER "$ENV{NG_SCCACHE_EXE}" CACHE FILEPATH "CXX compiler launcher" FORCE)
++    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded CACHE STRING "MSVC debug information format" FORCE)
 +    message(STATUS "ng-webkit Windows sccache launcher: $ENV{NG_SCCACHE_EXE}")
++    message(STATUS "ng-webkit Windows MSVC debug information format: Embedded")
 +endif ()
  
  # Define minimum supported Windows version

@@ -53,7 +53,7 @@ fi
 
 # Baseline Win port (finish compile first). Set NG_WINDOWS_ENABLE_WEBGPU=1 for WebGPU/Dawn CMake flags.
 # Override fully with NG_WINDOWS_BUILD_INNER if needed.
-_WIN_BASE="perl Tools\\Scripts\\build-webkit --release --win --makeargs=-j${NINJA_JOBS} -DCMAKE_C_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_LINKER=C:/Progra~1/LLVM/bin/lld-link.exe -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DCMAKE_C_FLAGS=\"-D_CRT_SECURE_NO_WARNINGS -flto=thin\" -DCMAKE_CXX_FLAGS=\"-D_CRT_SECURE_NO_WARNINGS -flto=thin\""
+_WIN_BASE="perl Tools\\Scripts\\build-webkit --release --win --makeargs=-j${NINJA_JOBS} -DCMAKE_C_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_LINKER=C:/Progra~1/LLVM/bin/lld-link.exe -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DCMAKE_C_FLAGS=\"-D_CRT_SECURE_NO_WARNINGS -flto=thin\" -DCMAKE_CXX_FLAGS=\"-D_CRT_SECURE_NO_WARNINGS -flto=thin\""
 if [[ "$ENABLE_SCCACHE" == "1" ]]; then
   _WIN_BASE+=" -DCMAKE_C_COMPILER_LAUNCHER=$SCCACHE_EXE -DCMAKE_CXX_COMPILER_LAUNCHER=$SCCACHE_EXE"
 fi
