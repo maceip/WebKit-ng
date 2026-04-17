@@ -35,6 +35,7 @@ if (-not (Test-Path $configPath)) {
   throw "build-config.json not found: $configPath"
 }
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
+$patchManifestPath = Join-Path $here "patch-manifest.json"
 
 # Toolchain paths (Git, LLVM, CMake, ...) must be set before any git/perl/cmake call.
 if ($config.pathPrepend) {
@@ -334,6 +335,14 @@ if (-not (Test-Path $cache)) {
   throw "CMakeCache.txt missing under $out"
 }
 
+if ($null -ne $config.PSObject.Properties["enableSccache"] -and [bool]$config.enableSccache) {
+  $logFile = Join-Path $artDir ("build-webkit-" + $config.buildId + ".log")
+  $sccacheStats = if (Test-Path $logFile) { Get-Content $logFile -Tail 80 | Where-Object { $_ -match '^Compile requests\s+' } | Select-Object -Last 1 } else { $null }
+  if ($sccacheStats -match '^Compile requests\s+0\s*$') {
+    Write-Host "WARNING: sccache was requested but recorded zero compile requests. This build was effectively cold."
+  }
+}
+
 $bin = Join-Path $out "bin"
 $required = @("MiniBrowser.exe", "WebKit2.dll", "WebCore.dll", "JavaScriptCore.dll")
 foreach ($r in $required) {
@@ -587,6 +596,9 @@ Copy-Item $prePath $artDir
 Copy-Item $postPath $artDir
 Copy-Item $validationPath $artDir
 Copy-Item $cmakeCacheSummaryPath $artDir
+if (Test-Path $patchManifestPath) {
+  Copy-Item $patchManifestPath $artDir
+}
 if ($config.bootstrap -and (Test-Path $config.bootstrap)) {
   Copy-Item (Join-Path $config.bootstrap "*.log") $artDir -ErrorAction SilentlyContinue
 }

@@ -1,0 +1,12 @@
+diff --git a/Source/cmake/OptionsMSVC.cmake b/Source/cmake/OptionsMSVC.cmake
+--- a/Source/cmake/OptionsMSVC.cmake
++++ b/Source/cmake/OptionsMSVC.cmake
+@@ -61,5 +61,5 @@
+ # Create pdb files for debugging purposes, also for Release builds
+-MSVC_ADD_COMPILE_OPTIONS(/Zi /GS)
++MSVC_ADD_COMPILE_OPTIONS(/GS)
+ 
+ # Disable ICF (identical code folding) optimization,
+ # as it makes it unsafe to pointer-compare functions with identical definitions.
+-add_link_options(/DEBUG /OPT:NOICF /OPT:REF)
++add_link_options(/OPT:NOICF /OPT:REF)

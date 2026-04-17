@@ -3,6 +3,8 @@
 This change lane owns the custom Windows WebGPU service work.
 
 See `DESIGN.md` for the Windows Dawn runtime map.
+See `GREEN_COMPAT39.md` and `config/windows-webgpu-dawn-green.json` for the
+first known-green Windows WebGPU/Dawn baseline and recovery details.
 
 The Windows build can compile with WebGPU/Dawn enabled, but runtime acceptance
 requires a service/process path that makes WebGPU usable from MiniBrowser. Keep

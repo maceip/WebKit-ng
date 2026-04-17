@@ -15,6 +15,7 @@ S3_PREFIX="${NG_WINDOWS_ARTIFACT_S3:-${NG_ARTIFACT_BUCKET:-s3://cory-build-artif
 BOOTSTRAP="${NG_WINDOWS_BOOTSTRAP:-C:/Bootstrap}"
 TOOLBIN="${NG_WINDOWS_TOOLBIN:-C:/Bootstrap/toolbin}"
 RUBY="${NG_WINDOWS_RUBY:-C:/Ruby34-x64}"
+PYTHON="${NG_WINDOWS_PYTHON:-C:/Python314}"
 LLVM="${NG_WINDOWS_LLVM:-C:/Program Files/LLVM}"
 GIT="${NG_WINDOWS_GIT:-C:/Program Files/Git/cmd}"
 CMAKE_BIN="${NG_WINDOWS_CMAKE:-C:/Program Files/CMake/bin}"
@@ -25,6 +26,7 @@ VCPKG_ROOT="${NG_WINDOWS_VCPKG_ROOT:-C:/vcpkg}"
 ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-0}"
 SCCACHE_EXE="${NG_WINDOWS_SCCACHE_EXE:-$TOOLBIN/sccache.exe}"
 SCCACHE_DIR="${NG_WINDOWS_SCCACHE_DIR:-C:/Bootstrap/sccache}"
+NINJA_JOBS="${NG_WINDOWS_NINJA_JOBS:-4}"
 
 WEBKIT_URL="${NG_WINDOWS_WEBKIT_URL:-https://github.com/WebKit/WebKit.git}"
 WEBKIT_COMMIT="${NG_WINDOWS_WEBKIT_COMMIT:-52dbebe20b922cab89928085f9dcfa8082a813e4}"
@@ -51,12 +53,12 @@ fi
 
 # Baseline Win port (finish compile first). Set NG_WINDOWS_ENABLE_WEBGPU=1 for WebGPU/Dawn CMake flags.
 # Override fully with NG_WINDOWS_BUILD_INNER if needed.
-_WIN_BASE='perl Tools\Scripts\build-webkit --release --win -DCMAKE_C_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_C_FLAGS=-D_CRT_SECURE_NO_WARNINGS -DCMAKE_CXX_FLAGS=-D_CRT_SECURE_NO_WARNINGS'
+_WIN_BASE="perl Tools\\Scripts\\build-webkit --release --win --makeargs=-j${NINJA_JOBS} -DCMAKE_C_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_CXX_COMPILER=C:/Progra~1/LLVM/bin/clang-cl.exe -DCMAKE_LINKER=C:/Progra~1/LLVM/bin/lld-link.exe -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON -DCMAKE_C_FLAGS=\"-D_CRT_SECURE_NO_WARNINGS -flto=thin\" -DCMAKE_CXX_FLAGS=\"-D_CRT_SECURE_NO_WARNINGS -flto=thin\""
 if [[ "$ENABLE_SCCACHE" == "1" ]]; then
   _WIN_BASE+=" -DCMAKE_C_COMPILER_LAUNCHER=$SCCACHE_EXE -DCMAKE_CXX_COMPILER_LAUNCHER=$SCCACHE_EXE"
 fi
 if [[ "${NG_WINDOWS_ENABLE_WEBGPU:-0}" == "1" ]]; then
-  BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE} --webgpu -DENABLE_EXPERIMENTAL_FEATURES=ON}"
+  BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE} --webgpu -DENABLE_EXPERIMENTAL_FEATURES=ON -DENABLE_WEBXR=OFF}"
 else
   BUILD_INNER="${NG_WINDOWS_BUILD_INNER:-${_WIN_BASE}}"
 fi
@@ -113,9 +115,11 @@ cp "$SCRIPT_DIR/remote-build.ps1" "$STAGE/"
 cp "$SCRIPT_DIR/ssm-worker.ps1" "$STAGE/"
 
 CONFIG_JSON="$STAGE/build-config.json"
-PATH_PREPEND="${TOOLBIN};${GIT};${RUBY}/bin;${LLVM}/bin;${CMAKE_BIN};${NINJA_BIN};${PERL_BIN}"
+PATCH_MANIFEST_JSON="$STAGE/patch-manifest.json"
+PATH_PREPEND="${TOOLBIN};${GIT};${RUBY}/bin;${PYTHON};${PYTHON}/Scripts;${LLVM}/bin;${CMAKE_BIN};${NINJA_BIN};${PERL_BIN}"
 
 export NG_STAGE_CONFIG_OUT="$CONFIG_JSON"
+export NG_STAGE_PATCH_MANIFEST_OUT="$PATCH_MANIFEST_JSON"
 export NG_BUILD_ID="$ID"
 export NG_WORKDIR="$WORKDIR"
 export NG_WEBKIT_URL="$WEBKIT_URL"
@@ -141,12 +145,54 @@ if [[ -z "${NG_WINDOWS_SPARSE_PATHS+x}" ]]; then
 fi
 
 python3 <<'PY'
-import json, os
+import hashlib, json, os
+from pathlib import Path
+
 out = os.environ["NG_STAGE_CONFIG_OUT"]
+patch_manifest_out = os.environ["NG_STAGE_PATCH_MANIFEST_OUT"]
 use_clean = os.environ.get("NG_USE_CLEAN", "1").strip() not in ("0", "false", "False", "")
 enable_sccache = os.environ.get("NG_ENABLE_SCCACHE", "0").strip() in ("1", "true", "True", "yes", "on")
 sparse_raw = os.environ.get("NG_WINDOWS_SPARSE_PATHS", "").strip()
 sparse = sparse_raw.split() if sparse_raw else []
+stage = Path(patch_manifest_out).parent
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def patch_records(bucket):
+    base = stage / "patches" / bucket
+    if not base.is_dir():
+        return []
+    records = []
+    for path in sorted(base.iterdir()):
+        if path.suffix not in (".patch", ".diff"):
+            continue
+        records.append({
+            "bucket": bucket,
+            "name": path.name,
+            "relativePath": str(path.relative_to(stage)).replace("\\", "/"),
+            "sha256": sha256(path),
+        })
+    return records
+
+patch_manifest = {
+    "schema": 1,
+    "buildId": os.environ["NG_BUILD_ID"],
+    "platform": "windows",
+    "source": {
+        "url": os.environ["NG_WEBKIT_URL"],
+        "commit": os.environ["NG_WEBKIT_COMMIT"],
+        "preset": os.environ.get("NG_WINDOWS_SOURCE_PRESET", ""),
+    },
+    "patches": patch_records("common") + patch_records("windows"),
+}
+with open(patch_manifest_out, "w", encoding="utf-8") as f:
+    json.dump(patch_manifest, f, indent=2)
+
 cfg = {
     "buildId": os.environ["NG_BUILD_ID"],
     "workdir": os.environ["NG_WORKDIR"],
@@ -165,6 +211,7 @@ cfg = {
     "sccacheExe": os.environ["NG_SCCACHE_EXE"],
     "sccacheDir": os.environ["NG_SCCACHE_DIR"],
     "toolbin": os.environ["NG_TOOLBIN"],
+    "patchManifest": "patch-manifest.json",
 }
 if sparse:
     cfg["sparseCheckoutPaths"] = sparse

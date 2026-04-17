@@ -1,0 +1,20 @@
+diff --git a/Source/cmake/WebKitCompilerFlags.cmake b/Source/cmake/WebKitCompilerFlags.cmake
+--- a/Source/cmake/WebKitCompilerFlags.cmake
++++ b/Source/cmake/WebKitCompilerFlags.cmake
+@@ -180,10 +180,15 @@ if (COMPILER_IS_GCC_OR_CLANG)
+         WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wcast-align)
+     endif ()
+     WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wformat-security
+-                                         -Wmissing-format-attribute
+                                          -Wpointer-arith
+                                          -Wundef)
+ 
++    if (WIN32)
++        WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wno-unused-function)
++    else ()
++        WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Wmissing-format-attribute)
++    endif ()
++
+     # Warnings to be disabled
+     # FIXME: We should probably not be disabling -Wno-maybe-uninitialized?
+     WEBKIT_PREPEND_GLOBAL_COMPILER_FLAGS(-Qunused-arguments

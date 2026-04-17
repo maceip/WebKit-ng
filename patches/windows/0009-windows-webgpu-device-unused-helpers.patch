@@ -1,0 +1,21 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+@@ -90,7 +90,7 @@ namespace WebCore::WebGPU {
+ #define DAWN_LABEL_STRING(webcoreString) (webcoreString)
+ #endif
+ 
+-static auto invalidEntryPointName()
++[[maybe_unused]] static auto invalidEntryPointName()
+ {
+     return CString(""_s);
+ }
+@@ -224,7 +224,7 @@ RefPtr<Sampler> DeviceImpl::createSampler(const SamplerDescriptor& descriptor)
+     return SamplerImpl::create(adoptWebGPU(wgpuDeviceCreateSampler(m_backing.get(), &backingDescriptor)), convertToBackingContext);
+ }
+ 
+-static WGPUColorSpace NODELETE convertToWGPUColorSpace(const PredefinedColorSpace& colorSpace)
++[[maybe_unused]] static WGPUColorSpace NODELETE convertToWGPUColorSpace(const PredefinedColorSpace& colorSpace)
+ {
+     switch (colorSpace) {
+     case PredefinedColorSpace::SRGB:

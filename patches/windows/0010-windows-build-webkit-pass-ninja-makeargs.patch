@@ -1,0 +1,14 @@
+diff --git a/Tools/Scripts/build-webkit b/Tools/Scripts/build-webkit
+--- a/Tools/Scripts/build-webkit
++++ b/Tools/Scripts/build-webkit
+@@ -331,7 +331,9 @@ if (isWin() || isPlayStation() || (isJSCOnly() && isWindows())) {
+     chdirWebKit();
+     if (canUseNinja()) {
+         chdir File::Spec->catdir($baseProductDir, configuration());
+-        $result = system("ninja");
++        my $ninjaCommand = "ninja";
++        $ninjaCommand .= " $makeArgs" if $makeArgs;
++        $result = system($ninjaCommand);
+     } else {
+         $result = buildVisualStudioProject(File::Spec->catfile($baseProductDir, configuration(), "WebKit.sln"), $clean);
+     }

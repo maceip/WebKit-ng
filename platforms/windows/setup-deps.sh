@@ -21,6 +21,8 @@ Environment:
   NG_WINDOWS_BOOTSTRAP               remote bootstrap root (default: C:/Bootstrap)
   NG_WINDOWS_TOOLBIN                 remote toolbin (default: C:/Bootstrap/toolbin)
   NG_WINDOWS_VCPKG_ROOT              remote vcpkg root (default: C:/vcpkg)
+                                     gperf.exe is installed into TOOLBIN
+                                     Python is installed at C:/Python314
   NG_WINDOWS_PROVISION_S3            S3 prefix for the provision script upload
   NG_WINDOWS_RESTORE_BASELINE_VCPKG  restore release-vcpkg_installed.tar (default: 1)
   NG_WINDOWS_REQUIRE_DAWN            require Dawn header/DLL after setup

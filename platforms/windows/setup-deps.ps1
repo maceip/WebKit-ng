@@ -13,6 +13,7 @@
     C:\BuildTools\Common7\Tools\VsDevCmd.bat
     C:\vcpkg
     C:\Bootstrap\toolbin
+    C:\Bootstrap\toolbin\gperf.exe
 
   The bash wrapper ships this file to the Windows machine through SSM.
 #>
@@ -23,6 +24,7 @@ param(
   [string]$VcpkgRoot = "C:\vcpkg",
   [string]$VsInstallPath = "C:\BuildTools",
   [string]$RubyRoot = "C:\Ruby34-x64",
+  [string]$PythonRoot = "C:\Python314",
   [string]$StrawberryRoot = "C:\Strawberry",
   [string]$BaselineS3Prefix = "s3://cory-build-artifacts-euc1-095713295645-20260407/webkit/windows-build29-20260413",
   [string]$BaselineS3Region = "eu-central-1",
@@ -156,6 +158,19 @@ function Ensure-StrawberryPerl {
   Invoke-Native "msiexec.exe" @("/i", $msi, "/qn", "/norestart", "INSTALLDIR=$StrawberryRoot") @(0, 3010)
 }
 
+function Ensure-Python {
+  $pythonExe = Join-Path $PythonRoot "python.exe"
+  if (Test-Path $pythonExe) {
+    Write-Step "Python already installed"
+    return
+  }
+  Write-Step "Install Python"
+  $url = "https://www.python.org/ftp/python/3.14.4/python-3.14.4-amd64.exe"
+  $exe = Join-Path $Bootstrap "installers\python-installer.exe"
+  Invoke-Download $url $exe
+  Invoke-Native $exe @("/quiet", "InstallAllUsers=1", "PrependPath=1", "Include_test=0", "TargetDir=$PythonRoot") @(0, 3010)
+}
+
 function Ensure-CMake {
   if (Test-Path "C:\Program Files\CMake\bin\cmake.exe") {
     Write-Step "CMake already installed"
@@ -245,6 +260,28 @@ function Ensure-Vcpkg {
   Invoke-Native "cmd.exe" @("/c", (Join-Path $VcpkgRoot "bootstrap-vcpkg.bat"), "-disableMetrics")
 }
 
+function Ensure-Gperf {
+  $gperfExe = Join-Path $Toolbin "gperf.exe"
+  if (Test-Path $gperfExe) {
+    Write-Step "gperf already installed"
+    return
+  }
+
+  Write-Step "Install gperf through vcpkg"
+  $vcpkgExe = Join-Path $VcpkgRoot "vcpkg.exe"
+  if (-not (Test-Path $vcpkgExe)) {
+    throw "Cannot install gperf before vcpkg is bootstrapped: $vcpkgExe"
+  }
+
+  Add-SystemPath @("C:\Program Files\Git\cmd", "C:\Program Files\Git\bin")
+  Invoke-Native $vcpkgExe @("install", "gperf:x64-windows") @(0)
+  $installed = Get-ChildItem -Path $VcpkgRoot -Recurse -File -Filter "gperf.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $installed) {
+    throw "vcpkg install gperf completed but gperf.exe was not found under $VcpkgRoot"
+  }
+  Copy-Item $installed.FullName $gperfExe -Force
+}
+
 function Restore-BaselineVcpkg {
   if (-not $RestoreBaselineVcpkg) { return }
   $dawnDll = Join-Path $VcpkgRoot "installed\x64-windows-webkit\bin\webgpu_dawn.dll"
@@ -280,6 +317,7 @@ function Test-RequiredPaths {
   $checks = [ordered]@{
     git = "C:\Program Files\Git\cmd\git.exe"
     ruby = (Join-Path $RubyRoot "bin\ruby.exe")
+    python = (Join-Path $PythonRoot "python.exe")
     perl = (Join-Path $StrawberryRoot "perl\bin\perl.exe")
     cmake = "C:\Program Files\CMake\bin\cmake.exe"
     clangCl = "C:\Program Files\LLVM\bin\clang-cl.exe"
@@ -287,6 +325,7 @@ function Test-RequiredPaths {
     ninja = (Join-Path $VsInstallPath "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe")
     vcpkg = (Join-Path $VcpkgRoot "vcpkg.exe")
     sccache = (Join-Path $Toolbin "sccache.exe")
+    gperf = (Join-Path $Toolbin "gperf.exe")
   }
   if ($RequireDawn) {
     $checks["dawnHeader"] = (Join-Path $VcpkgRoot "installed\x64-windows-webkit\include\dawn\webgpu.h")
@@ -326,21 +365,25 @@ try {
   Add-SystemPath @("C:\Program Files\Git\cmd", "C:\Program Files\Git\usr\bin")
   Ensure-VisualStudioBuildTools
   Ensure-Ruby
+  Ensure-Python
   Ensure-StrawberryPerl
   Ensure-CMake
   Ensure-LLVM
   Ensure-Sccache
+  Ensure-Vcpkg
+  Ensure-Gperf
   Add-SystemPath @(
     $Toolbin,
     "C:\Program Files\Git\cmd",
     "C:\Program Files\Git\usr\bin",
     (Join-Path $RubyRoot "bin"),
+    $PythonRoot,
+    (Join-Path $PythonRoot "Scripts"),
     "C:\Program Files\LLVM\bin",
     "C:\Program Files\CMake\bin",
     (Join-Path $VsInstallPath "Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja"),
     (Join-Path $StrawberryRoot "perl\bin")
   )
-  Ensure-Vcpkg
   Restore-BaselineVcpkg
   Test-RequiredPaths
 } finally {
