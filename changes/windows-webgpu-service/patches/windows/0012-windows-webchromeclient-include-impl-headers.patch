@@ -1,0 +1,22 @@
+diff --git a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
+index 83519d3b8b16..c24302d18a96 100644
+--- a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
++++ b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
+@@ -132,13 +132,13 @@
+ #include <wtf/TZoneMallocInlines.h>
+ 
+ #if HAVE(WEBGPU_IMPLEMENTATION)
+-#import <WebCore/WebGPUCreateImpl.h>
++#include <WebCore/WebGPUCreateImpl.h>
+ #endif
+ 
+ #if HAVE(SHAPE_DETECTION_API_IMPLEMENTATION)
+-#import <WebCore/BarcodeDetectorImplementation.h>
+-#import <WebCore/FaceDetectorImplementation.h>
+-#import <WebCore/TextDetectorImplementation.h>
++#include <WebCore/BarcodeDetectorImplementation.h>
++#include <WebCore/FaceDetectorImplementation.h>
++#include <WebCore/TextDetectorImplementation.h>
+ #endif
+ 
+ #if ENABLE(APPLE_PAY_AMS_UI)
