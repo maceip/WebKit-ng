@@ -1,0 +1,37 @@
+diff --git a/Source/WebKit/GPUProcess/graphics/RemoteRenderingBackend.cpp b/Source/WebKit/GPUProcess/graphics/RemoteRenderingBackend.cpp
+index 035e59d263c3..8651991d75f1 100644
+--- a/Source/WebKit/GPUProcess/graphics/RemoteRenderingBackend.cpp
++++ b/Source/WebKit/GPUProcess/graphics/RemoteRenderingBackend.cpp
+@@ -80,14 +80,14 @@
+ #endif
+ 
+ #if HAVE(SHAPE_DETECTION_API_IMPLEMENTATION)
+-#import <WebCore/BarcodeDetectorImplementation.h>
+-#import <WebCore/FaceDetectorImplementation.h>
+-#import <WebCore/TextDetectorImplementation.h>
++#include <WebCore/BarcodeDetectorImplementation.h>
++#include <WebCore/FaceDetectorImplementation.h>
++#include <WebCore/TextDetectorImplementation.h>
+ #endif
+ 
+ #if ENABLE(RE_DYNAMIC_CONTENT_SCALING)
+-#import "DynamicContentScalingBifurcatedImageBuffer.h"
+-#import "DynamicContentScalingImageBufferBackend.h"
++#include "DynamicContentScalingBifurcatedImageBuffer.h"
++#include "DynamicContentScalingImageBufferBackend.h"
+ #endif
+ 
+ #define MESSAGE_CHECK(assertion, message) MESSAGE_CHECK_WITH_MESSAGE_BASE(assertion, m_streamConnection, message);
+diff --git a/Source/WebKit/UIProcess/WebAuthentication/WebAuthenticationRequestData.cpp b/Source/WebKit/UIProcess/WebAuthentication/WebAuthenticationRequestData.cpp
+index dea23e691941..ce3d841920ae 100644
+--- a/Source/WebKit/UIProcess/WebAuthentication/WebAuthenticationRequestData.cpp
++++ b/Source/WebKit/UIProcess/WebAuthentication/WebAuthenticationRequestData.cpp
+@@ -28,7 +28,7 @@
+ 
+ #if ENABLE(WEB_AUTHN)
+ 
+-#import <WebCore/UserVerificationRequirement.h>
++#include <WebCore/UserVerificationRequirement.h>
+ 
+ namespace WebKit {
+ using namespace WebCore;
