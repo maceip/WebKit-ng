@@ -39,23 +39,24 @@ NG_WINDOWS_ENABLE_WEBGPU=1 \
 
 ## Current Known-Good
 
-- Build id: `dawn-d3d12-runtime-20260416T011849Z`
+- Build id: `dawn-api-compat39`
+- Date: `2026-04-17`
 - Source: `iangrunert/WebKit@64f58084c78130b874d05dbcfb508147354095af`
-- Builder: `i-0d254760fe07c5e9f`, `eu-west-1`
+- Builder: `i-05ab9a8ed6d325b3d`, `eu-west-1`
+- Green AMI: `ami-0151481223e75e08f`
 - Artifact prefix:
-  `s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-d3d12-runtime-20260416T011849Z/`
-- Archive:
-  `ng-webkit-windows-dawn-d3d12-runtime-20260416T011849Z.tar.gz`
-- Compile result: all 9559 targets linked, including `bin\TestWebKit.exe`
-- Dawn load check: `validation-recovered.json` reports
-  `webgpuDawnLoadAfterMatchingAbseil.loaded=true`.
-- Current milestone probe: `validation-report.json.runtime.smokePassed=true`
-  means MiniBrowser exposed `navigator.gpu`, returned an adapter, created a
-  device, and exposed `device.queue`.
+  `s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-api-compat39/`
+- Compile result: all `[9558/9558]` targets linked.
+- Dawn load check: packaged Dawn runtime loads beside `MiniBrowser.exe`.
+- Manual MiniBrowser check: `navigator.gpu` exists and `requestAdapter()`
+  resolves.
+- Follow-up patch: `changes/windows-webgpu-service/patches/windows/0014-windows-webgpu-request-device-default-descriptor.patch`
+  fixes `adapter.requestDevice()` with no descriptor.
 
 ## Build Runner Rules
 
-1. Use the standard entrypoint only: `./scripts/run-build.sh windows <id>`.
+1. Use the web runner API or dashboard for repeatability work. The CLI wrapper is
+   allowed only as the implementation behind `POST /builds`.
 2. Bundle repo patches and active changes; do not patch the Windows checkout by
    hand.
 3. Start the worker detached from SSM, but keep SSM commands short.
@@ -66,6 +67,26 @@ NG_WINDOWS_ENABLE_WEBGPU=1 \
 7. For WebGPU/Dawn, use `scripts/run-windows-webgpu-dawn.sh` or the
    `webgpu-dawn` service preset so the source branch and feature flags remain
    repo-owned.
+
+## Runner API Contract
+
+Agents should use the dashboard API for source state, dependencies, logs, and
+build launch:
+
+```bash
+curl http://localhost:8787/git
+curl -X POST http://localhost:8787/git/pull -H 'content-type: application/json' -d '{}'
+curl http://localhost:8787/dependencies/status
+curl http://localhost:8787/logs
+curl 'http://localhost:8787/logs/<name>?tail=1000'
+curl -X POST http://localhost:8787/builds \
+  -H 'content-type: application/json' \
+  -d '{"platforms":["windows"],"presets":{"windows":"webgpu-dawn"},"reason":"windows webgpu dawn retry"}'
+```
+
+Do not start unmanaged SSM build commands. The service writes one service log per
+platform, records build state in `var/state.json`, and exposes log tails over
+HTTP.
 
 ## WebGPU/Dawn Build Requirements
 
@@ -145,11 +166,45 @@ Bring WebGPU up in this order:
 7. Submit commands and verify mapped-buffer readback.
 8. Re-enable the Windows presentation/canvas path only after compute works.
 9. Configure a WebGPU canvas and draw one visible triangle.
-10. Add smoke coverage so future compile fixes cannot silently break runtime.
+10. Draw a small animated bouncy-ball scene in MiniBrowser.
+11. Add smoke coverage so future compile fixes cannot silently break runtime.
 
 Keep compute and presentation separate while debugging. If compute fails, debug
 WebCore/Dawn object, callback, queue, and buffer plumbing. If compute works but
 canvas fails, debug HWND/surface/swapchain/compositor integration.
+
+## Bouncy Ball Target
+
+The original acceptance target is:
+
+1. Green build: WebKit links with WebGPU/Dawn enabled.
+2. Green run: MiniBrowser opens, `navigator.gpu`, adapter, device, and queue all
+   work without page exceptions.
+3. Visible frame: a WebGPU page draws a triangle or colored quad.
+4. Bouncy ball: the same page animates a ball using `requestAnimationFrame`,
+   WebGPU render pass submission, and canvas presentation.
+
+The next code target after `0014` is therefore not more compile stubbing. It is
+runtime validation for `device.limits`, `device.queue`, shader module creation,
+buffer creation, command encoding, queue submit, and only then Windows
+presentation.
+
+## Sccache Reality Check
+
+The green run requested sccache but produced:
+
+```text
+Compile requests 0
+Cache hits 0
+Cache misses 0
+```
+
+The generated CMake cache had direct `clang-cl.exe` compilers and no
+`CMAKE_C_COMPILER_LAUNCHER` / `CMAKE_CXX_COMPILER_LAUNCHER` entries. Until the
+runner proves generated Ninja rules include `sccache.exe`, cache is not part of
+the acceptance story. CMake supports `CMAKE_<LANG>_COMPILER_LAUNCHER`, but our
+WebKit Windows wrapper path still needs a verified handoff into the generated
+build directory.
 
 ## Worker Hang Avoidance
 

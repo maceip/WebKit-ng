@@ -18,13 +18,19 @@
       ]
     },
     "windows": {
-      "source": "known-good Windows build 29",
+      "source": "known-good Windows WebGPU/Dawn compat39 lane",
       "installRoot": "C:\\Bootstrap\\ng-deps",
       "items": [
         {
-          "id": "windows-build29-baseline",
+          "id": "windows-webgpu-dawn-compat39-baseline",
           "kind": "s3-prefix",
-          "uri": "s3://cory-build-artifacts-euc1-095713295645-20260407/webkit/windows-build29-20260413/"
+          "uri": "s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows/dawn-api-compat39/"
+        },
+        {
+          "id": "windows-webgpu-dawn-green-ami",
+          "kind": "aws-ami",
+          "region": "eu-west-1",
+          "amiId": "ami-0151481223e75e08f"
         }
       ]
     },

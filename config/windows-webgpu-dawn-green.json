@@ -17,7 +17,7 @@
   "environment": {
     "NG_WINDOWS_ENABLE_WEBGPU": "1",
     "NG_WINDOWS_ENABLE_SCCACHE": "1",
-    "NG_WINDOWS_NINJA_JOBS": "4"
+    "NG_WINDOWS_NINJA_JOBS": "8"
   },
   "cmakeAndBuild": {
     "webgpu": true,
@@ -34,6 +34,7 @@
   "rootPatchDirectory": "patches/windows",
   "notes": [
     "Future build bundles include patch-manifest.json with exact patch names and SHA256 hashes.",
+    "The green build completed at -j4. The repeat lane now defaults to -j8 on the 128 GiB Windows shape.",
     "The green build completed without effective sccache; fix cache plumbing before expecting fast retries."
   ]
 }

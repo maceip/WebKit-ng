@@ -1,6 +1,7 @@
 import http from 'node:http';
-import { spawn } from 'node:child_process';
-import { closeSync, createReadStream, createWriteStream, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
+import { closeSync, createReadStream, createWriteStream, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +13,7 @@ const logDir = join(varDir, 'logs');
 const stateFile = join(varDir, 'state.json');
 const port = Number(process.env.PORT || 8787);
 const running = new Map();
+const execFileAsync = promisify(execFile);
 
 mkdirSync(logDir, { recursive: true });
 
@@ -384,6 +386,101 @@ function readJsonFile(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+async function runCaptured(command, args, options = {}) {
+  const startedAt = now();
+  try {
+    const result = await execFileAsync(command, args, {
+      cwd: options.cwd || root,
+      env: { ...process.env, ...(options.env || {}) },
+      timeout: options.timeout || 120000,
+      maxBuffer: options.maxBuffer || 2 * 1024 * 1024,
+      windowsHide: true
+    });
+    return {
+      ok: true,
+      command,
+      args,
+      cwd: options.cwd || root,
+      startedAt,
+      finishedAt: now(),
+      stdout: result.stdout,
+      stderr: result.stderr
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      command,
+      args,
+      cwd: options.cwd || root,
+      startedAt,
+      finishedAt: now(),
+      exitCode: error.code,
+      signal: error.signal,
+      stdout: error.stdout || '',
+      stderr: error.stderr || error.message
+    };
+  }
+}
+
+async function gitStatus() {
+  const [head, branch, status, remote, recent] = await Promise.all([
+    runCaptured('git', ['rev-parse', 'HEAD']),
+    runCaptured('git', ['branch', '--show-current']),
+    runCaptured('git', ['status', '--short']),
+    runCaptured('git', ['remote', '-v']),
+    runCaptured('git', ['log', '--oneline', '-8'])
+  ]);
+  return {
+    head: head.stdout.trim(),
+    branch: branch.stdout.trim(),
+    dirty: status.stdout.trim().split(/\r?\n/).filter(Boolean),
+    remotes: remote.stdout.trim().split(/\r?\n/).filter(Boolean),
+    recent: recent.stdout.trim().split(/\r?\n/).filter(Boolean),
+    commands: { head, branch, status, remote, recent }
+  };
+}
+
+function commandExists(command) {
+  const check = process.platform === 'win32'
+    ? spawn('where.exe', [command], { stdio: 'ignore' })
+    : spawn('bash', ['-lc', `command -v ${JSON.stringify(command)} >/dev/null 2>&1`], { stdio: 'ignore' });
+  return new Promise((resolve) => {
+    check.on('exit', (code) => resolve(code === 0));
+    check.on('error', () => resolve(false));
+  });
+}
+
+async function dependencyStatus() {
+  const requiredCommands = ['git', 'python3', 'node', 'npm', 'aws', 'tar'];
+  const optionalCommands = ['ruby', 'perl', 'cmake', 'ninja', 'gperf'];
+  const checks = {};
+  await Promise.all([...requiredCommands, ...optionalCommands].map(async (command) => {
+    checks[command] = await commandExists(command);
+  }));
+  const missingRequired = requiredCommands.filter((command) => !checks[command]);
+  const config = readJsonFile(join(root, 'config', 'dependencies.json'));
+  return {
+    ok: missingRequired.length === 0,
+    missingRequired,
+    requiredCommands,
+    optionalCommands,
+    commands: checks,
+    config
+  };
+}
+
+function logFiles() {
+  if (!existsSync(logDir)) return [];
+  return readdirSync(logDir)
+    .filter((name) => /^[A-Za-z0-9._-]+$/.test(name))
+    .map((name) => {
+      const path = join(logDir, name);
+      const stats = statSync(path);
+      return { name, size: stats.size, modifiedAt: stats.mtime.toISOString() };
+    })
+    .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+}
+
 function requestUrl(url) {
   return new URL(url, `http://127.0.0.1:${port}`);
 }
@@ -477,7 +574,13 @@ const server = http.createServer(async (req, res) => {
         dashboard: 'GET /',
         endpoints: [
           'GET /health',
+          'GET /git',
+          'POST /git/pull',
           'GET /platforms',
+          'GET /dependencies',
+          'GET /dependencies/status',
+          'GET /logs',
+          'GET /logs/:name?tail=200',
           'GET /builds',
           'POST /builds',
           'POST /builds?dryRun=1',
@@ -489,6 +592,18 @@ const server = http.createServer(async (req, res) => {
           'POST /builds/:id/cancel'
         ]
       });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'git' && parts.length === 1) {
+      return json(res, 200, await gitStatus());
+    }
+
+    if (req.method === 'POST' && parts[0] === 'git' && parts[1] === 'pull' && parts.length === 2) {
+      const payload = await body(req);
+      const args = payload?.rebase ? ['pull', '--ff-only', '--rebase'] : ['pull', '--ff-only'];
+      const result = await runCaptured('git', args, { timeout: 5 * 60 * 1000 });
+      writeFileSync(join(logDir, 'api-git-pull.log'), `[${now()}] git ${args.join(' ')}\n${result.stdout}\n${result.stderr}\n`, { flag: 'a' });
+      return json(res, result.ok ? 200 : 500, result);
     }
 
     if (req.method === 'GET' && parts[0] === 'health' && parts.length === 1) {
@@ -522,6 +637,27 @@ const server = http.createServer(async (req, res) => {
         config: readJsonFile(join(root, 'config', 'dependencies.json')),
         catalog: existsSync(catalogPath) ? readJsonFile(catalogPath) : null
       });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'dependencies' && parts[1] === 'status' && parts.length === 2) {
+      return json(res, 200, await dependencyStatus());
+    }
+
+    if (req.method === 'GET' && parts[0] === 'logs' && parts.length === 1) {
+      return json(res, 200, { logDir, logs: logFiles() });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'logs' && parts[1] && parts.length === 2) {
+      const name = parts[1];
+      if (!/^[A-Za-z0-9._-]+$/.test(name)) return json(res, 400, { error: 'invalid log name' });
+      const logPath = join(logDir, name);
+      if (!existsSync(logPath)) return json(res, 404, { error: 'log not found' });
+      if (url.searchParams.has('tail')) {
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        return res.end(tailTextFile(logPath, url.searchParams.get('tail')));
+      }
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      return createReadStream(logPath).pipe(res);
     }
 
     if (req.method === 'POST' && parts[0] === 'builds' && parts.length === 1) {

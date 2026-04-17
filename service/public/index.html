@@ -91,6 +91,7 @@
     <nav class="tabs" aria-label="Dashboard tabs">
       <button type="button" class="tab active" data-tab="builds">Builds</button>
       <button type="button" class="tab" data-tab="new-build">New build</button>
+      <button type="button" class="tab" data-tab="runner">Runner</button>
     </nav>
     <section id="panel-builds" class="panel">
       <h2>Builds</h2>
@@ -124,8 +125,30 @@
       </div>
       <div id="start-msg" class="msg"></div>
     </section>
+    <section id="panel-runner" class="panel" hidden>
+      <h2>Runner</h2>
+      <div class="toolbar">
+        <button type="button" class="secondary" id="btn-runner-refresh">Refresh runner state</button>
+        <button type="button" class="secondary" id="btn-git-pull">git pull --ff-only</button>
+      </div>
+      <div id="runner-msg" class="msg"></div>
+      <div class="stack">
+        <div>
+          <h2>Git</h2>
+          <pre id="git-state" class="logbox"></pre>
+        </div>
+        <div>
+          <h2>Dependencies</h2>
+          <pre id="dep-state" class="logbox"></pre>
+        </div>
+        <div>
+          <h2>Logs</h2>
+          <div id="runner-logs-wrap" style="overflow-x:auto;"></div>
+        </div>
+      </div>
+    </section>
   </main>
-  <footer>API: <code>POST /builds</code> · <code>GET /builds</code> · <code>GET /builds/:id/logs/:platform?tail=</code> (up to 15000 lines)</footer>
+  <footer>API: <code>POST /builds</code> · <code>GET /git</code> · <code>GET /dependencies/status</code> · <code>GET /logs</code></footer>
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -150,6 +173,7 @@
       });
       $('panel-builds').hidden = name !== 'builds';
       $('panel-new-build').hidden = name !== 'new-build';
+      $('panel-runner').hidden = name !== 'runner';
     }
 
     function parseJsonTextarea(id) {
@@ -276,6 +300,37 @@
       renderBuilds(builds);
     }
 
+    function renderLogs(logs) {
+      const wrap = $('runner-logs-wrap');
+      if (!logs.length) {
+        wrap.innerHTML = '<p class="sub">No logs.</p>';
+        return;
+      }
+      wrap.innerHTML = '<table><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody>' +
+        logs.map((log) => '<tr><td class="mono">' + esc(log.name) + '</td><td>' + esc(log.size) + '</td><td>' + esc(log.modifiedAt) + '</td><td><a href="/logs/' + encodeURIComponent(log.name) + '?tail=1000" target="_blank" rel="noopener">tail</a></td></tr>').join('') +
+        '</tbody></table>';
+    }
+
+    async function refreshRunner() {
+      const [git, deps, logs] = await Promise.all([
+        api('/git'),
+        api('/dependencies/status'),
+        api('/logs')
+      ]);
+      $('git-state').textContent = JSON.stringify({
+        branch: git.branch,
+        head: git.head,
+        dirty: git.dirty,
+        recent: git.recent
+      }, null, 2);
+      $('dep-state').textContent = JSON.stringify({
+        ok: deps.ok,
+        missingRequired: deps.missingRequired,
+        commands: deps.commands
+      }, null, 2);
+      renderLogs(logs.logs || []);
+    }
+
     $('btn-start').addEventListener('click', async () => {
       const msg = $('start-msg');
       msg.textContent = '';
@@ -311,6 +366,21 @@
     });
 
     $('btn-refresh').addEventListener('click', () => refreshBuilds().catch((e) => alert(e.message)));
+    $('btn-runner-refresh').addEventListener('click', () => refreshRunner().catch((e) => alert(e.message)));
+    $('btn-git-pull').addEventListener('click', async () => {
+      const msg = $('runner-msg');
+      msg.textContent = 'Running git pull --ff-only...';
+      msg.className = 'msg';
+      try {
+        const result = await api('/git/pull', { method: 'POST', body: '{}' });
+        msg.textContent = result.ok ? 'git pull completed.' : 'git pull failed.';
+        msg.className = result.ok ? 'msg ok' : 'msg err';
+        await refreshRunner();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = 'msg err';
+      }
+    });
     document.querySelectorAll('[data-tab]').forEach((button) => {
       button.addEventListener('click', () => showTab(button.dataset.tab));
     });
@@ -326,7 +396,7 @@
     (async () => {
       try {
         await loadPlatforms();
-        await refreshBuilds();
+        await Promise.all([refreshBuilds(), refreshRunner()]);
         armTimer();
       } catch (e) {
         $('builds-wrap').innerHTML = '<p class="msg err">' + e.message + '</p>';
