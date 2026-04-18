@@ -23,20 +23,15 @@ index b2096f1ac31..425a6e61424 100644
  }
  
  RefPtr<BindGroup> DeviceImpl::createBindGroup(const BindGroupDescriptor& descriptor)
-@@ -478,11 +478,11 @@ RefPtr<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineDescriptor& descriptor)
-     });
+@@ -478,7 +478,7 @@ RefPtr<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineD
+     WGPUComputePipelineDescriptor backingDescriptor { };
+     backingDescriptor.nextInChain = nullptr;
+     backingDescriptor.label = DawnCompat::toDawnStringView(label);
+-    backingDescriptor.layout = descriptor.layout ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr;
++    backingDescriptor.layout = (descriptor.layout && !descriptor.layout->isAutoPipelineLayout()) ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr;
+     backingDescriptor.compute = computeStage;
  
-     WGPUComputePipelineDescriptor backingDescriptor {
-         .label = label.data(),
--        .layout = descriptor.layout ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr,
-+        .layout = (descriptor.layout && !descriptor.layout->isAutoPipelineLayout()) ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr,
-         .compute = WGPUProgrammableStageDescriptor {
-             .module = m_convertToBackingContext->convertToBacking(protect(descriptor.compute.module).get()),
-             .entryPoint = entryPoint ? entryPoint->data() : nullptr,
-             .constantCount = backingConstantEntries.size(),
-             .constants = backingConstantEntries.size() ? backingConstantEntries.span().data() : nullptr,
-         }
-     };
+     return ComputePipelineImpl::create(adoptWebGPU(wgpuDeviceCreateComputePipeline(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
 diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
 index 1f1b5b56a01..00f4b4b02aa 100644
 --- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
