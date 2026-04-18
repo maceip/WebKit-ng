@@ -31,7 +31,7 @@ builder (compliance, disk, sccache, reporting):**
 
 ## Targets
 
-- `android`: WPE Android/WPEWebKit, built locally on this machine.
+- `android`: WPE Android/WPEWebKit — **remote** Gradle on the default Linux SSM builder unless **`NG_ANDROID_LOCAL=1`** (see **`RUNNER.md`**).
 - `windows`: remote Windows builder driven through AWS SSM, with artifacts in S3.
 - `macos`: remote mac2-m2.metal EC2 instance driven through AWS SSM.
 - `linux`, `ios`: placeholders for the next platform scripts.
@@ -171,6 +171,8 @@ cd service
 npm install
 npm start
 ```
+
+The service loads **`../.env`** at startup (keys only fill in when unset in the environment), so **`NG_ANDROID_INSTANCE_ID`**, **`NG_WINDOWS_INSTANCE_ID`**, **`NG_ARTIFACT_BUCKET`**, etc. can live next to **`.env.example`** without exporting them by hand.
 
 Then:
 

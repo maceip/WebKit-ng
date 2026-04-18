@@ -6,6 +6,26 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+function parseEnvFile(path) {
+  if (!existsSync(path)) return {};
+  const result = {};
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (match) result[match[1]] = match[2];
+  }
+  return result;
+}
+
+/** Merge repo-root `.env` into `process.env` for keys not already set (so `npm start` picks up NG_* without a shell wrapper). */
+function applyRepoEnv() {
+  const parsed = parseEnvFile(join(root, '.env'));
+  for (const [key, value] of Object.entries(parsed)) {
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+applyRepoEnv();
+
 const serviceDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dashboardPath = join(serviceDir, 'public', 'index.html');
 const varDir = join(root, 'var');
@@ -56,20 +76,11 @@ function loadState() {
   return JSON.parse(readFileSync(stateFile, 'utf8'));
 }
 
-function parseEnvFile(path) {
-  if (!existsSync(path)) return {};
-  const result = {};
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
-    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
-    if (match) result[match[1]] = match[2];
-  }
-  return result;
-}
-
 function activeBuildsFromMarkerFiles() {
   const markers = [
     { platform: 'windows', path: join(varDir, 'WINDOWS_ACTIVE_BUILD.env'), idKey: 'WINDOWS_BUILD_ID' },
-    { platform: 'macos', path: join(varDir, 'MACOS_ACTIVE_BUILD.env'), idKey: 'MACOS_BUILD_ID' }
+    { platform: 'macos', path: join(varDir, 'MACOS_ACTIVE_BUILD.env'), idKey: 'MACOS_BUILD_ID' },
+    { platform: 'android', path: join(varDir, 'ANDROID_ACTIVE_BUILD.env'), idKey: 'ANDROID_BUILD_ID' }
   ];
 
   return markers.flatMap(({ platform, path, idKey }) => {
@@ -333,6 +344,9 @@ function artifactPrefixForPlatform(id, platform, request) {
 function artifactLinksForPlatform(id, platform, request) {
   const artifactPrefix = artifactPrefixForPlatform(id, platform, request);
   const links = { artifactPrefix };
+  if (platform === 'android') {
+    links.gradleLog = `${artifactPrefix}/gradle-android.log`;
+  }
   if (platform === 'windows') {
     links.validationReport = `${artifactPrefix}/validation-report.json`;
     links.validationRecovered = `${artifactPrefix}/validation-recovered.json`;
@@ -582,7 +596,7 @@ function tailTextFile(path, lineCount) {
 
 /**
  * Marker-file builds (remote SSM) are injected even after completion because
- * WINDOWS_ACTIVE_BUILD.env / MACOS_ACTIVE_BUILD.env may linger. Infer terminal
+ * WINDOWS_ACTIVE_BUILD.env / MACOS_ACTIVE_BUILD.env / ANDROID_ACTIVE_BUILD.env may linger. Infer terminal
  * status from the orchestrator tee log on this host (no build-script changes).
  */
 function inferExternalBuildStatusFromLog(id, platform) {
@@ -612,7 +626,7 @@ function inferExternalBuildStatusFromLog(id, platform) {
     text
   );
   const ok =
-    /marker poll OK|remote build completed|checkpoint\.sh.*completed|windows remote build completed|macos remote build completed/i.test(text) ||
+    /marker poll OK|remote build completed|checkpoint\.sh.*completed|windows remote build completed|macos remote build completed|android remote build completed/i.test(text) ||
     /BUILD_DONE\.txt/i.test(text);
 
   if (failed && ok) return { status: 'failed', detail: 'log contains both success and failure markers; treating as failed', logPath };
@@ -650,9 +664,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && parts[0] === 'meta' && parts.length === 1) {
+      const envPath = join(root, '.env');
       return json(res, 200, {
         name: 'ng-webkit build service',
         dashboard: 'GET /',
+        repoEnvFile: envPath,
+        repoEnvPresent: existsSync(envPath),
         endpoints: [
           'GET /health',
           'GET /git',

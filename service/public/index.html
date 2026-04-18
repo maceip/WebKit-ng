@@ -95,7 +95,7 @@
     </nav>
     <section id="panel-builds" class="panel">
       <h2>Builds</h2>
-      <p class="sub" style="margin:0 0 0.75rem;">Remote SSM builds listed from marker env files: status is <strong>inferred</strong> from the orchestrator log on this machine (not from lingering marker files alone). Use log preview for full ninja output.</p>
+      <p class="sub" style="margin:0 0 0.75rem;">Remote SSM builds (Windows, macOS, Android) are merged from marker env files (<code>WINDOWS_ACTIVE_BUILD.env</code>, <code>MACOS_ACTIVE_BUILD.env</code>, <code>ANDROID_ACTIVE_BUILD.env</code>): status is <strong>inferred</strong> from the orchestrator log on this machine (not from lingering marker files alone). Use log preview for full ninja / Gradle output.</p>
       <div class="toolbar">
         <button type="button" class="secondary" id="btn-refresh">Refresh now</button>
         <label class="plat"><input type="checkbox" id="autorefresh" checked /> Auto-refresh list (10s)</label>
@@ -119,7 +119,7 @@
       <p style="margin: 0.75rem 0 0.25rem; color: var(--muted); font-size: 12px;">Global env JSON (optional)</p>
       <textarea id="env-json" placeholder='{"NG_ALERT_WEBHOOK_URL":"..."}'></textarea>
       <p style="margin: 0.75rem 0 0.25rem; color: var(--muted); font-size: 12px;">Platform env JSON (optional)</p>
-      <textarea id="platform-env-json" placeholder='{"windows":{"NG_WINDOWS_ENABLE_SCCACHE":"1"}}'></textarea>
+      <textarea id="platform-env-json" placeholder='{"android":{"NG_ANDROID_INSTANCE_ID":"i-08a3afbbac86a0002","NG_ANDROID_BUILDER_ANDROID_HOME":"/home/ubuntu/Android/Sdk"}}'></textarea>
       <div class="toolbar" style="margin-top:0.75rem;">
         <button type="button" id="btn-start">Start build</button>
       </div>

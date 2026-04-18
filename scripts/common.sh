@@ -231,3 +231,17 @@ ng_macos_ssm_poll_build_markers() {
   local interval="${MACOS_BUILD_POLL_INTERVAL:-90}"
   _ng_ssm_poll_build_markers "$workdir" "$instance" "$region" "AWS-RunShellScript" "$max_seconds" "$interval"
 }
+
+# Android remote (Linux) — same marker contract as macOS.
+ng_android_ssm_poll_build_markers() {
+  local workdir="$1"
+  local region="${NG_ANDROID_REGION:-${AWS_REGION:-eu-central-1}}"
+  local instance="${NG_ANDROID_INSTANCE_ID:-}"
+  [[ -n "$instance" ]] || {
+    log "NG_ANDROID_INSTANCE_ID is required for Android marker polling"
+    return 1
+  }
+  local max_seconds="${ANDROID_BUILD_POLL_MAX_SECONDS:-172800}"
+  local interval="${ANDROID_BUILD_POLL_INTERVAL:-90}"
+  _ng_ssm_poll_build_markers "$workdir" "$instance" "$region" "AWS-RunShellScript" "$max_seconds" "$interval"
+}

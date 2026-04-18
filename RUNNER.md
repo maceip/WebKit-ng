@@ -182,11 +182,14 @@ Operational runbook (setup, disk, sccache, what “green” means): **`platforms
   corrupt `WebKitBuild/XCBuildData/build.db`. Only run one macOS build at a
   time, or use `NG_MACOS_USE_CLEAN_CHECKOUT=1` (per-build checkout).
 
-### Android (local)
+### Android (default: remote Linux SSM)
 
-- Builds on this host. No SSM, no marker polling — just
-  `run-build.sh android <id>` which calls `platforms/android/build.sh` and
-  invokes `./gradlew`.
+- **Remote (default):** `run-build.sh android <id>` targets **`NG_ANDROID_INSTANCE_ID`**, or
+  **`i-08a3afbbac86a0002`** if unset (`NG_ANDROID_DEFAULT_INSTANCE_ID` overrides that default).
+  Same pattern as macOS: bundle → S3 → short SSM bootstrap → detached `ssm-worker.sh` →
+  marker poll; `var/ANDROID_ACTIVE_BUILD.env` for the dashboard.
+- **Local:** set **`NG_ANDROID_LOCAL=1`** (or **`NG_ANDROID_REMOTE=0`**) to run `./gradlew` on
+  **this** host only (no SSM).
 
 ## Files
 
@@ -202,6 +205,8 @@ Operational runbook (setup, disk, sccache, what “green” means): **`platforms
   runs on the Windows builder.
 - `platforms/macos/remote-build.sh`, `ssm-worker.sh` — shell that runs on the
   macOS builder.
+- `platforms/android/remote-build.sh`, `ssm-worker.sh` — shell on the remote
+  **Linux** Android builder (default instance unless `NG_ANDROID_LOCAL=1`).
 - `patches/<platform>/` — ordered patch series bundled with each build.
 - `config/platforms.json`, `config/build-machines.json` — platform status and
   builder metadata.

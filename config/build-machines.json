@@ -1,9 +1,14 @@
 {
   "machines": {
     "android": {
-      "type": "local",
+      "type": "local-or-ssm",
       "root": "/home/ubuntu",
-      "dependencyRoot": "/home/ubuntu/ng-webkit/var/deps/android"
+      "dependencyRoot": "/home/ubuntu/ng-webkit/var/deps/android",
+      "regionEnv": "NG_ANDROID_REGION",
+      "defaultRegion": "eu-central-1",
+      "instanceIdEnv": "NG_ANDROID_INSTANCE_ID",
+      "defaultInstanceId": "i-08a3afbbac86a0002",
+      "notes": "Default is remote SSM to defaultInstanceId. Set NG_ANDROID_LOCAL=1 to run Gradle on the orchestrator host only. Override instance with NG_ANDROID_INSTANCE_ID or NG_ANDROID_DEFAULT_INSTANCE_ID."
     },
     "windows": {
       "type": "aws-ssm",

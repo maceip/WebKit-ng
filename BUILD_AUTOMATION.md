@@ -12,7 +12,7 @@ Forward-looking **requirements** for ng-webkit builds. **Platform-specific runbo
 |----------|----------------|
 | **Windows** (start here for infra) | **`platforms/windows/WINDOWS_BUILDER.md`** — compliance (`setup-deps`), **disk checks**, **sccache**, truth of `BUILD_DONE.txt`, runner curls |
 | **macOS** | **`platforms/macos/notes.md`**, `platforms/macos/build.sh` |
-| **Android** | **`platforms/android/setup-deps.sh`**, `platforms/android/build.sh` |
+| **Android** | **`platforms/android/setup-deps.sh`**, `platforms/android/build.sh` — **default: remote** Linux SSM builder; **`NG_ANDROID_LOCAL=1`** for local Gradle only (see **`RUNNER.md`**) |
 | **iOS** | Not wired yet |
 
 ---
