@@ -114,7 +114,7 @@ for change_index, change in enumerate(changes):
         continue
     change_id = change["id"]
     change_dir = root / "changes" / change_id
-    if not change_dir.is_dir():
+    if patch_source == "working" and not change_dir.is_dir():
         raise SystemExit(f"Enabled change does not exist: {change_id}")
     for bucket in ("common", platform):
         source_prefix = f"changes/{change_id}/patches/{bucket}"
