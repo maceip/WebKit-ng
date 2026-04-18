@@ -55,6 +55,11 @@ NG_WINDOWS_ENABLE_WEBGPU=1 \
 - Phase 2 starter patch: `changes/windows-webgpu-service/patches/windows/0015-windows-dawn-compute-smoke-core.patch`
   wires the first Windows Dawn compute-only path: `queue.writeBuffer`,
   `createComputePipeline`, and `beginComputePass`.
+- Phase 2 follow-ups:
+  `changes/windows-webgpu-service/patches/windows/0016-windows-dawn-auto-compute-layout.patch`
+  passes `nullptr` to Dawn for WebGPU `layout: "auto"` compute pipelines, and
+  `changes/windows-webgpu-service/patches/windows/0017-windows-dawn-buffer-size-readback.patch`
+  maps omitted `mapAsync()` sizes to Dawn's real buffer size for readback.
 
 ## Build Runner Rules
 
@@ -187,11 +192,12 @@ The original acceptance target is:
 4. Bouncy ball: the same page animates a ball using `requestAnimationFrame`,
    WebGPU render pass submission, and canvas presentation.
 
-The next code target after `0015` is to build and run the validation probe until
-`validation-report.json.runtime.compute.passed` is true. If it fails, debug the
-compute-only stack first: `device.limits`, `device.queue`, shader module
-creation, buffer creation, command encoding, queue submit, and mapped-buffer
-readback. Windows presentation comes after that.
+The next code target after `0015` through `0017` is to build and run the
+validation probe until `validation-report.json.runtime.compute.passed` is true.
+If it fails, debug the compute-only stack first: `device.limits`,
+`device.queue`, shader module creation, buffer creation, command encoding,
+queue submit, and mapped-buffer readback. Windows presentation comes after
+that.
 
 ## Sccache Reality Check
 
