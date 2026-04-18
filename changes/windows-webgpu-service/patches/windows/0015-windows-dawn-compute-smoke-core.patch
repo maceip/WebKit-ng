@@ -1,0 +1,107 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
+index f2bd177..52ee782 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
+@@ -138,8 +138,21 @@ RefPtr<RenderPassEncoder> CommandEncoderImpl::beginRenderPass(const RenderPassDe
+ RefPtr<ComputePassEncoder> CommandEncoderImpl::beginComputePass(const std::optional<ComputePassDescriptor>& descriptor)
+ {
+ #if PLATFORM(WIN)
+-    UNUSED_PARAM(descriptor);
+-    return nullptr;
++    String label = descriptor ? descriptor->label : emptyString();
++
++    WGPUComputePassTimestampWrites timestampWrites { };
++    if (descriptor && descriptor->timestampWrites && descriptor->timestampWrites->querySet) {
++        timestampWrites.querySet = m_convertToBackingContext->convertToBacking(*protect(descriptor->timestampWrites->querySet));
++        timestampWrites.beginningOfPassWriteIndex = descriptor->timestampWrites->beginningOfPassWriteIndex;
++        timestampWrites.endOfPassWriteIndex = descriptor->timestampWrites->endOfPassWriteIndex;
++    }
++
++    WGPUComputePassDescriptor backingDescriptor { };
++    backingDescriptor.nextInChain = nullptr;
++    backingDescriptor.label = DawnCompat::toDawnStringView(label);
++    backingDescriptor.timestampWrites = timestampWrites.querySet ? &timestampWrites : nullptr;
++
++    return ComputePassEncoderImpl::create(adoptWebGPU(wgpuCommandEncoderBeginComputePass(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
+ #else
+     String label = descriptor ? descriptor->label : emptyString();
+ 
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+index 01c3f0e..2667398 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+@@ -441,8 +441,43 @@ RefPtr<ShaderModule> DeviceImpl::createShaderModule(const ShaderModuleDescriptor
+ #if PLATFORM(WIN)
+ RefPtr<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineDescriptor& descriptor)
+ {
+-    UNUSED_PARAM(descriptor);
+-    return nullptr;
++    auto label = descriptor.label.utf8();
++
++    std::optional<CString> entryPoint;
++    if (!descriptor.compute.entryPoint.isNull()) {
++        entryPoint = descriptor.compute.entryPoint.utf8();
++        if (descriptor.compute.entryPoint.length() != String::fromUTF8(entryPoint->data()).length())
++            entryPoint = invalidEntryPointName();
++    }
++
++    auto constantNames = descriptor.compute.constants.map([](const auto& constant) {
++        bool lengthsMatch = constant.key.length() == String::fromUTF8(constant.key.utf8().data()).length();
++        return lengthsMatch ? constant.key.utf8() : "";
++    });
++
++    Vector<WGPUConstantEntry> backingConstantEntries(descriptor.compute.constants.size(), [&](size_t i) {
++        const auto& constant = descriptor.compute.constants[i];
++        WGPUConstantEntry entry { };
++        entry.nextInChain = nullptr;
++        entry.key = DawnCompat::toDawnStringView(constantNames[i]);
++        entry.value = constant.value;
++        return entry;
++    });
++
++    WGPUProgrammableStageDescriptor computeStage { };
++    computeStage.nextInChain = nullptr;
++    computeStage.module = m_convertToBackingContext->convertToBacking(protect(descriptor.compute.module).get());
++    computeStage.entryPoint = entryPoint ? DawnCompat::toDawnStringView(*entryPoint) : DawnCompat::toDawnStringView("main");
++    computeStage.constantCount = backingConstantEntries.size();
++    computeStage.constants = backingConstantEntries.size() ? backingConstantEntries.span().data() : nullptr;
++
++    WGPUComputePipelineDescriptor backingDescriptor { };
++    backingDescriptor.nextInChain = nullptr;
++    backingDescriptor.label = DawnCompat::toDawnStringView(label);
++    backingDescriptor.layout = descriptor.layout ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr;
++    backingDescriptor.compute = computeStage;
++
++    return ComputePipelineImpl::create(adoptWebGPU(wgpuDeviceCreateComputePipeline(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
+ }
+ 
+ RefPtr<RenderPipeline> DeviceImpl::createRenderPipeline(const RenderPipelineDescriptor& descriptor)
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp
+index c24eb3b..2c09f0c 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUQueueImpl.cpp
+@@ -115,13 +115,18 @@ void QueueImpl::onSubmittedWorkDone(CompletionHandler<void()>&& callback)
+ }
+ 
+ void QueueImpl::writeBuffer(
+-    const Buffer&,
+-    Size64,
+-    std::span<const uint8_t>,
+-    Size64,
+-    std::optional<Size64>)
++    const Buffer& buffer,
++    Size64 bufferOffset,
++    std::span<const uint8_t> source,
++    Size64 dataOffset,
++    std::optional<Size64> size)
+ {
+-    RELEASE_ASSERT_NOT_REACHED();
++#if PLATFORM(WIN)
++    auto data = source.subspan(dataOffset, size.value_or(source.size() - dataOffset));
++    wgpuQueueWriteBuffer(m_backing.get(), protect(m_convertToBackingContext)->convertToBacking(buffer), bufferOffset, data.data(), data.size());
++#else
++    wgpuQueueWriteBuffer(m_backing.get(), protect(m_convertToBackingContext)->convertToBacking(buffer), bufferOffset, source.subspan(dataOffset, size.value_or(source.size() - dataOffset)));
++#endif
+ }
+ 
+ void QueueImpl::writeTexture(

@@ -359,6 +359,11 @@ New-Dir (Join-Path $Bootstrap "installers")
 $transcript = Join-Path $Bootstrap ("setup-deps-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ") + ".log")
 Start-Transcript -Path $transcript -Force | Out-Null
 try {
+  $bootDisk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceId='C:'" -ErrorAction SilentlyContinue
+  if ($bootDisk) {
+    $gib = [math]::Floor([double]$bootDisk.FreeSpace / 1GB)
+    Write-Host "C: free space before provisioning: ~$gib GiB (plan enough headroom for vcpkg + WebKit + sccache)"
+  }
   Ensure-RegistryLongPaths
   Ensure-AwsCli
   Ensure-Git

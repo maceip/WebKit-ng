@@ -5,6 +5,10 @@ The runner is a small Node.js HTTP service in `service/` that turns
 the same way: create a build id, spawn the platform shell script, tail its log
 into `var/logs/`, and record state in `var/state.json`.
 
+**Product requirements** for turnaround, accurate success/failure reporting,
+platform scope (Android, Windows, macOS; iOS later), and **machine provisioning
+without ad-hoc installs**: see **[`BUILD_AUTOMATION.md`](./BUILD_AUTOMATION.md)**.
+
 ## Current state (2026-04-16)
 
 - **REST API**: implemented (`service/src/server.js`, port 8787).
@@ -118,6 +122,9 @@ or a marker-poll probe). Long-running xcodebuild/ninja sessions run
 ## Platform-specific notes
 
 ### Windows (`i-0d254760fe07c5e9f`, `eu-west-1`)
+
+Operational runbook (setup, disk, sccache, what “green” means): **`platforms/windows/WINDOWS_BUILDER.md`**.
+
 
 - Detachment: `Start-Process -WindowStyle Hidden` survives SSM session end.
   **Do not** use `-NoNewWindow -Wait` — it hangs post-build in headless

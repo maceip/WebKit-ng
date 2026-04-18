@@ -26,6 +26,8 @@ VCPKG_ROOT="${NG_WINDOWS_VCPKG_ROOT:-C:/vcpkg}"
 ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-1}"
 SCCACHE_EXE="${NG_WINDOWS_SCCACHE_EXE:-$TOOLBIN/sccache.exe}"
 SCCACHE_DIR="${NG_WINDOWS_SCCACHE_DIR:-C:/Bootstrap/sccache}"
+# Abort remote build early if any involved drive falls below this (GiB free). Prevents silent full-disk failures.
+NG_WINDOWS_MIN_FREE_GB="${NG_WINDOWS_MIN_FREE_GB:-50}"
 NINJA_JOBS="${NG_WINDOWS_NINJA_JOBS:-4}"
 FAST_RETRY="${NG_WINDOWS_FAST_RETRY:-0}"
 
@@ -143,6 +145,7 @@ export NG_USE_CLEAN="$USE_CLEAN"
 export NG_ENABLE_SCCACHE="$ENABLE_SCCACHE"
 export NG_SCCACHE_EXE="$SCCACHE_EXE"
 export NG_SCCACHE_DIR="$SCCACHE_DIR"
+export NG_MIN_FREE_GIB="$NG_WINDOWS_MIN_FREE_GB"
 export NG_TOOLBIN="$TOOLBIN"
 export NG_BOOTSTRAP="$BOOTSTRAP"
 export NG_FAST_RETRY="$FAST_RETRY"
@@ -203,9 +206,12 @@ patch_manifest = {
 with open(patch_manifest_out, "w", encoding="utf-8") as f:
     json.dump(patch_manifest, f, indent=2)
 
+min_free = int(os.environ.get("NG_MIN_FREE_GIB", "50").strip() or "50")
+
 cfg = {
     "buildId": os.environ["NG_BUILD_ID"],
     "workdir": os.environ["NG_WORKDIR"],
+    "minFreeGiB": min_free,
     "webkitGitUrl": os.environ["NG_WEBKIT_URL"],
     "webkitCommit": os.environ["NG_WEBKIT_COMMIT"],
     "useCleanCheckout": use_clean,

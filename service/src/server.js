@@ -271,9 +271,19 @@ function expandBuildRequest(payload, platforms) {
 
   return {
     ...payload,
+    reason: normalizeBuildReason(payload.reason, platforms, presets),
     presets,
     platformEnv
   };
+}
+
+function normalizeBuildReason(reason, platforms, presets) {
+  const raw = String(reason || '').trim();
+  const isWindowsWebGPU = platforms.includes('windows') && ['webgpu-dawn', 'webgpu-dawn-fast'].includes(presets.windows);
+  if (!isWindowsWebGPU) return raw;
+  if (/^webgpu phase \d+:/i.test(raw)) return raw;
+  if (!raw) return 'webgpu phase 1: foundations reproducible build';
+  return `webgpu phase 1: ${raw}`;
 }
 
 function artifactPrefixForPlatform(id, platform, request) {
@@ -287,6 +297,31 @@ function artifactPrefixForPlatform(id, platform, request) {
   if (platform === 'macos') return env.NG_MACOS_ARTIFACT_S3 || `${bucket}/macos/${id}`;
   if (platform === 'android') return env.NG_ANDROID_ARTIFACT_S3 || `${bucket}/android/${id}`;
   return `${bucket}/${platform}/${id}`;
+}
+
+function artifactLinksForPlatform(id, platform, request) {
+  const artifactPrefix = artifactPrefixForPlatform(id, platform, request);
+  const links = { artifactPrefix };
+  if (platform === 'windows') {
+    links.validationReport = `${artifactPrefix}/validation-report.json`;
+    links.validationRecovered = `${artifactPrefix}/validation-recovered.json`;
+    links.sccacheReport = `${artifactPrefix}/sccache-report.json`;
+    links.patchManifest = `${artifactPrefix}/patch-manifest.json`;
+    links.manifestPre = `${artifactPrefix}/manifest-pre.json`;
+    links.manifestPost = `${artifactPrefix}/manifest-post.json`;
+    links.buildProgress = `${artifactPrefix}/build-progress.json`;
+  }
+  return links;
+}
+
+function defaultCheckpointMessage(build, payload) {
+  const phase = Number(payload.phase || 0);
+  const windows = (build.platforms || []).find((platform) => platform.name === 'windows');
+  if (phase === 1 && windows) {
+    const artifacts = windows.artifacts || artifactLinksForPlatform(build.id, 'windows', build.request || {});
+    return `Phase 1 gate met: preset=${build.request?.presets?.windows || 'default'} artifact=${artifacts.artifactPrefix} validation=${artifacts.validationReport}`;
+  }
+  return 'manual checkpoint';
 }
 
 function buildEnvForPlatform(build, platform) {
@@ -377,7 +412,8 @@ function createBuild(platforms, meta = {}) {
       name,
       status: 'running',
       log: join(logDir, `${id}-${name}.service.log`),
-      artifactPrefix: artifactPrefixForPlatform(id, name, meta)
+      artifactPrefix: artifactPrefixForPlatform(id, name, meta),
+      artifacts: artifactLinksForPlatform(id, name, meta)
     })),
     request: meta
   };
@@ -699,7 +735,8 @@ const server = http.createServer(async (req, res) => {
           platforms: build.platforms.map((platform) => ({
             name: platform.name,
             status: platform.status,
-            artifactPrefix: platform.artifactPrefix
+            artifactPrefix: platform.artifactPrefix,
+            artifacts: platform.artifacts || artifactLinksForPlatform(build.id, platform.name, build.request || {})
           }))
         });
       }
@@ -720,7 +757,11 @@ const server = http.createServer(async (req, res) => {
 
       if (req.method === 'POST' && parts[2] === 'checkpoint') {
         const payload = await body(req);
-        const checkpoint = { time: now(), message: payload.message || 'manual checkpoint' };
+        const checkpoint = {
+          time: now(),
+          phase: payload.phase || null,
+          message: payload.message || defaultCheckpointMessage(build, payload)
+        };
         const updated = updateBuild(build.id, { checkpoints: [...(build.checkpoints || []), checkpoint] });
         return json(res, 200, updated);
       }

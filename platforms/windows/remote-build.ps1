@@ -54,6 +54,45 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
   throw "git.exe not on PATH after pathPrepend and standard locations - install Git for Windows."
 }
 
+function Assert-DiskHeadroom {
+  param([object]$Cfg)
+  $min = 50
+  if ($Cfg.PSObject.Properties["minFreeGiB"] -and $null -ne $Cfg.minFreeGiB) {
+    $min = [int]$Cfg.minFreeGiB
+  }
+  $letters = New-Object "System.Collections.Generic.HashSet[string]"
+  [void]$letters.Add("C")
+  foreach ($key in @("workdir", "vcpkgRoot", "cleanSourceRoot", "legacySourceRoot", "outputDir", "bootstrap")) {
+    if (-not $Cfg.PSObject.Properties[$key]) { continue }
+    $p = $Cfg.$key
+    if (-not $p) { continue }
+    if ($p -match "^([A-Za-z]):") {
+      [void]$letters.Add($matches[1].ToUpperInvariant())
+    }
+  }
+  if ($Cfg.PSObject.Properties["enableSccache"] -and [bool]$Cfg.enableSccache -and $Cfg.PSObject.Properties["sccacheDir"] -and $Cfg.sccacheDir) {
+    $sd = [string]$Cfg.sccacheDir
+    if ($sd -match "^([A-Za-z]):") {
+      [void]$letters.Add($matches[1].ToUpperInvariant())
+    }
+  }
+  foreach ($L in $letters) {
+    $dl = "${L}:"
+    $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceId='$dl'" -ErrorAction SilentlyContinue
+    if (-not $disk) {
+      Write-Host "WARN: could not query free space for $dl"
+      continue
+    }
+    $freeGiB = [math]::Floor([double]$disk.FreeSpace / 1GB)
+    Write-Host "Disk $dl ${freeGiB} GiB free (minimum required: $min GiB)"
+    if ($freeGiB -lt $min) {
+      throw "Insufficient disk space on ${dl}: ${freeGiB} GiB free; need at least $min GiB. Prune old checkouts under C:\W\, WebKitBuild, vcpkg buildtrees, or sccache. See platforms/windows/WINDOWS_BUILDER.md"
+    }
+  }
+}
+
+Assert-DiskHeadroom -Cfg $config
+
 New-Item -ItemType Directory -Force -Path $config.workdir | Out-Null
 $artDir = Join-Path $config.workdir "artifacts"
 New-Item -ItemType Directory -Force -Path $artDir | Out-Null
@@ -560,6 +599,60 @@ $testHtml = @"
     return String(e && (e.stack || e.message) || e);
   }
 
+  async function computeSmoke(device) {
+    const input = new Uint32Array([7, 11, 13, 17]);
+    const shader = device.createShaderModule({
+      code: `
+        @group(0) @binding(0) var<storage, read> inputData: array<u32>;
+        @group(0) @binding(1) var<storage, read_write> outputData: array<u32>;
+        @compute @workgroup_size(1)
+        fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+          outputData[id.x] = inputData[id.x] * 3u + 1u;
+        }
+      `
+    });
+    const pipeline = device.createComputePipeline({
+      layout: 'auto',
+      compute: { module: shader, entryPoint: 'main' }
+    });
+    const inputBuffer = device.createBuffer({
+      size: input.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+    });
+    const outputBuffer = device.createBuffer({
+      size: input.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+    });
+    const readbackBuffer = device.createBuffer({
+      size: input.byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+    });
+    device.queue.writeBuffer(inputBuffer, 0, input);
+    const bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: inputBuffer } },
+        { binding: 1, resource: { buffer: outputBuffer } }
+      ]
+    });
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(input.length);
+    pass.end();
+    encoder.copyBufferToBuffer(outputBuffer, 0, readbackBuffer, 0, input.byteLength);
+    device.queue.submit([encoder.finish()]);
+    await readbackBuffer.mapAsync(GPUMapMode.READ);
+    const values = Array.from(new Uint32Array(readbackBuffer.getMappedRange().slice(0)));
+    readbackBuffer.unmap();
+    return {
+      values,
+      expected: [22, 34, 40, 52],
+      passed: JSON.stringify(values) === JSON.stringify([22, 34, 40, 52])
+    };
+  }
+
   const report = {
     userAgent: navigator.userAgent,
     gpuAvailable: !!navigator.gpu,
@@ -571,6 +664,8 @@ $testHtml = @"
     adapterError: null,
     device: null,
     deviceError: null,
+    compute: null,
+    computeError: null,
     queueAvailable: false,
     smokePassed: false
   };
@@ -589,7 +684,12 @@ $testHtml = @"
             limits: pickLimits(device.limits)
           };
           report.queueAvailable = !!device.queue;
-          report.smokePassed = !!device.queue;
+          try {
+            report.compute = await computeSmoke(device);
+          } catch (e) {
+            report.computeError = errorString(e);
+          }
+          report.smokePassed = !!device.queue && !!(report.compute && report.compute.passed);
           if (device.destroy) device.destroy();
         } catch (e) {
           report.deviceError = errorString(e);

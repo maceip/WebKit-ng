@@ -25,6 +25,10 @@ Current "canonical" artifacts (latest green per platform): see
 [`ASSETS.md`](./ASSETS.md). Detailed runner state, known gotchas, and
 next steps: see [`RUNNER.md`](./RUNNER.md).
 
+**Build automation:** [`BUILD_AUTOMATION.md`](./BUILD_AUTOMATION.md). **Windows
+builder (compliance, disk, sccache, reporting):**
+[`platforms/windows/WINDOWS_BUILDER.md`](./platforms/windows/WINDOWS_BUILDER.md).
+
 ## Targets
 
 - `android`: WPE Android/WPEWebKit, built locally on this machine.
