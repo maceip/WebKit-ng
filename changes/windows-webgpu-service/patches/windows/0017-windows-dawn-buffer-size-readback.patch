@@ -1,0 +1,22 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
+index c2db3ee8634..bb80872a1d1 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPU/WebGPUExt.h
+@@ -201,10 +201,17 @@ static inline WGPULimits wgpuDefaultLimits()
+     return { };
+ }
+ 
++#if PLATFORM(WIN)
++static inline uint64_t wgpuBufferGetInitialSize(WGPUBuffer buffer)
++{
++    return wgpuBufferGetSize(buffer);
++}
++#else
+ static inline uint64_t wgpuBufferGetInitialSize(WGPUBuffer)
+ {
+     return 0;
+ }
++#endif
+ 
+ static inline std::span<uint8_t> wgpuBufferGetBufferContents(WGPUBuffer)
+ {
