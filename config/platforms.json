@@ -17,7 +17,8 @@
           "description": "Windows WebGPU/Dawn build on the iangrunert Gigacage/Skia fixes branch.",
           "env": {
             "NG_WINDOWS_SOURCE_PRESET": "iangrunert-win-gigacage-skia-fixes",
-            "NG_WINDOWS_ENABLE_WEBGPU": "1"
+            "NG_WINDOWS_ENABLE_WEBGPU": "1",
+            "NG_WINDOWS_ENABLE_SCCACHE": "1"
           },
           "validationArtifacts": [
             "validation-report.json",
@@ -32,7 +33,8 @@
             "webgpu_dawn.dll loads with LOAD_WITH_ALTERED_SEARCH_PATH",
             "packaged abseil_dll.dll matches Dawn's Abseil inline namespace",
             "validation-report.json runtime smoke shows adapter, device, and queue",
-            "BUILD_DONE.txt is written only after S3 sync succeeds"
+            "BUILD_DONE.txt is written only after S3 sync succeeds",
+            "sccache-report.json proves CMakeCache, build.ninja, Embedded MSVC debug info, and nonzero compile activity"
           ]
         }
       }

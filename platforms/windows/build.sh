@@ -23,10 +23,15 @@ NINJA_BIN="${NG_WINDOWS_NINJA:-C:/BuildTools/Common7/IDE/CommonExtensions/Micros
 PERL_BIN="${NG_WINDOWS_PERL:-C:/Strawberry/perl/bin}"
 VS_DEV_CMD="${NG_WINDOWS_VSDEVCMD:-C:/BuildTools/Common7/Tools/VsDevCmd.bat}"
 VCPKG_ROOT="${NG_WINDOWS_VCPKG_ROOT:-C:/vcpkg}"
-ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-0}"
+ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-1}"
 SCCACHE_EXE="${NG_WINDOWS_SCCACHE_EXE:-$TOOLBIN/sccache.exe}"
 SCCACHE_DIR="${NG_WINDOWS_SCCACHE_DIR:-C:/Bootstrap/sccache}"
 NINJA_JOBS="${NG_WINDOWS_NINJA_JOBS:-4}"
+
+if [[ "$ENABLE_SCCACHE" != "1" && "${NG_WINDOWS_ALLOW_SCCACHE_OFF:-0}" != "1" ]]; then
+  echo "Windows builds require sccache. Set NG_WINDOWS_ENABLE_SCCACHE=1, or NG_WINDOWS_ALLOW_SCCACHE_OFF=1 for an explicit emergency bypass." >&2
+  exit 2
+fi
 
 WEBKIT_URL="${NG_WINDOWS_WEBKIT_URL:-https://github.com/WebKit/WebKit.git}"
 WEBKIT_COMMIT="${NG_WINDOWS_WEBKIT_COMMIT:-52dbebe20b922cab89928085f9dcfa8082a813e4}"

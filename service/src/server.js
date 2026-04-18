@@ -261,6 +261,12 @@ function expandBuildRequest(payload, platforms) {
       ...normalizeStringRecord(configuredPreset?.env, `presets.${platform}.${presetName}.env`),
       ...normalizeStringRecord(payload.platformEnv?.[platform], `platformEnv.${platform}`)
     };
+    if (platform === 'windows') {
+      if (platformEnv[platform].NG_WINDOWS_ENABLE_SCCACHE && platformEnv[platform].NG_WINDOWS_ENABLE_SCCACHE !== '1') {
+        badRequest('Windows builds require NG_WINDOWS_ENABLE_SCCACHE=1');
+      }
+      platformEnv[platform].NG_WINDOWS_ENABLE_SCCACHE = '1';
+    }
   }
 
   return {
