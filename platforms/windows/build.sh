@@ -83,19 +83,28 @@ mkdir -p "$STAGE/patches/common" "$STAGE/patches/windows"
 export NG_STAGE_PATCH_ROOT="$STAGE/patches"
 export NG_BUILD_PLATFORM="windows"
 export NG_ROOT
+export NG_WINDOWS_PATCH_SOURCE="${NG_WINDOWS_PATCH_SOURCE:-committed}"
 python3 <<'PY'
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 root = Path(os.environ["NG_ROOT"])
 patch_root = Path(os.environ["NG_STAGE_PATCH_ROOT"])
 platform = os.environ["NG_BUILD_PLATFORM"]
+patch_source = os.environ.get("NG_WINDOWS_PATCH_SOURCE", "committed")
 changes_file = root / "config" / "changes.json"
 
-with changes_file.open(encoding="utf-8") as f:
-    changes = json.load(f).get("activeChanges", [])
+if patch_source == "committed":
+    changes_json = subprocess.check_output(["git", "-C", str(root), "show", "HEAD:config/changes.json"], text=True, encoding="utf-8")
+    changes = json.loads(changes_json).get("activeChanges", [])
+elif patch_source == "working":
+    with changes_file.open(encoding="utf-8") as f:
+        changes = json.load(f).get("activeChanges", [])
+else:
+    raise SystemExit(f"Unsupported NG_WINDOWS_PATCH_SOURCE: {patch_source}")
 
 for change_index, change in enumerate(changes):
     if not change.get("enabled"):
@@ -108,16 +117,40 @@ for change_index, change in enumerate(changes):
     if not change_dir.is_dir():
         raise SystemExit(f"Enabled change does not exist: {change_id}")
     for bucket in ("common", platform):
-        source_dir = change_dir / "patches" / bucket
-        if not source_dir.is_dir():
+        source_prefix = f"changes/{change_id}/patches/{bucket}"
+        if patch_source == "committed":
+            listed = subprocess.run(
+                ["git", "-C", str(root), "ls-tree", "-r", "--name-only", "HEAD", "--", source_prefix],
+                text=True,
+                encoding="utf-8",
+                stdout=subprocess.PIPE,
+                check=True,
+            ).stdout.splitlines()
+            patch_paths = [
+                Path(path)
+                for path in listed
+                if Path(path).suffix in (".patch", ".diff")
+            ]
+        else:
+            source_dir = change_dir / "patches" / bucket
+            if not source_dir.is_dir():
+                continue
+            patch_paths = [
+                patch.relative_to(root)
+                for patch in sorted(source_dir.iterdir())
+                if patch.suffix in (".patch", ".diff")
+            ]
+        if not patch_paths:
             continue
         target_dir = patch_root / bucket
         target_dir.mkdir(parents=True, exist_ok=True)
-        for patch_index, patch in enumerate(sorted(source_dir.iterdir())):
-            if patch.suffix not in (".patch", ".diff"):
-                continue
+        for patch_index, patch in enumerate(sorted(patch_paths)):
             target = target_dir / f"0000-change-{change_index:02d}-{patch_index:02d}-{change_id}-{patch.name}"
-            shutil.copy2(patch, target)
+            if patch_source == "committed":
+                content = subprocess.check_output(["git", "-C", str(root), "show", f"HEAD:{patch.as_posix()}"])
+                target.write_bytes(content)
+            else:
+                shutil.copy2(root / patch, target)
 PY
 cp -a "$NG_ROOT/patches/common/." "$STAGE/patches/common/" 2>/dev/null || true
 cp -a "$NG_ROOT/patches/windows/." "$STAGE/patches/windows/" 2>/dev/null || true
