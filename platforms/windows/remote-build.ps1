@@ -601,15 +601,16 @@ $testHtml = @"
 
   async function computeSmoke(device) {
     const input = new Uint32Array([7, 11, 13, 17]);
+    const shaderSource = [
+      '@group(0) @binding(0) var<storage, read> inputData: array<u32>;',
+      '@group(0) @binding(1) var<storage, read_write> outputData: array<u32>;',
+      '@compute @workgroup_size(1)',
+      'fn main(@builtin(global_invocation_id) id: vec3<u32>) {',
+      '  outputData[id.x] = inputData[id.x] * 3u + 1u;',
+      '}'
+    ].join('\n');
     const shader = device.createShaderModule({
-      code: `
-        @group(0) @binding(0) var<storage, read> inputData: array<u32>;
-        @group(0) @binding(1) var<storage, read_write> outputData: array<u32>;
-        @compute @workgroup_size(1)
-        fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-          outputData[id.x] = inputData[id.x] * 3u + 1u;
-        }
-      `
+      code: shaderSource
     });
     const pipeline = device.createComputePipeline({
       layout: 'auto',
