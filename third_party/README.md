@@ -8,3 +8,4 @@ Portable ng code must not include Chromium headers directly. Port behavior into
 `src/ng/browser/sync`, then add explicit adapters where Chromium wire protocol
 compatibility is required.
 
+---

@@ -3,6 +3,10 @@
 This is the repeatable path for the Windows WebGPU/Dawn lane. Keep this file
 updated when the build runner learns a new Windows-specific failure mode.
 
+**Do not infer milestone scope from this document.** Milestones and exit
+criteria are **only** in **`DOCUMENTATION.md`** (repo root). This runbook is
+commands, baselines, DLL rules, and patch **paths** only.
+
 ## Canonical Command
 
 ```bash
@@ -52,14 +56,11 @@ NG_WINDOWS_ENABLE_WEBGPU=1 \
   resolves.
 - Follow-up patch: `changes/windows-webgpu-service/patches/windows/0014-windows-webgpu-request-device-default-descriptor.patch`
   fixes `adapter.requestDevice()` with no descriptor.
-- Phase 2 starter patch: `changes/windows-webgpu-service/patches/windows/0015-windows-dawn-compute-smoke-core.patch`
-  wires the first Windows Dawn compute-only path: `queue.writeBuffer`,
-  `createComputePipeline`, and `beginComputePass`.
-- Phase 2 follow-ups:
-  `changes/windows-webgpu-service/patches/windows/0016-windows-dawn-auto-compute-layout.patch`
-  passes `nullptr` to Dawn for WebGPU `layout: "auto"` compute pipelines, and
-  `changes/windows-webgpu-service/patches/windows/0017-windows-dawn-buffer-size-readback.patch`
-  maps omitted `mapAsync()` sizes to Dawn's real buffer size for readback.
+- **Implementation patches** (scope: see milestone **2** in **`DOCUMENTATION.md`**
+  — nothing below defines the milestone):
+  - `changes/windows-webgpu-service/patches/windows/0015-windows-dawn-compute-smoke-core.patch`
+  - `changes/windows-webgpu-service/patches/windows/0016-windows-dawn-auto-compute-layout.patch`
+  - `changes/windows-webgpu-service/patches/windows/0017-windows-dawn-buffer-size-readback.patch`
 
 ## Build Runner Rules
 
@@ -265,3 +266,5 @@ aws s3 cp s3://cory-build-artifacts-euc1-095713295645-20260407/ng-webkit/windows
 If `webgpu_dawn.dll` fails to load, check the Abseil inline namespace in both
 DLLs before rebuilding. The symptom is usually a packaged `abseil_dll.dll`
 from one vcpkg tree and `webgpu_dawn.dll` from another.
+
+---

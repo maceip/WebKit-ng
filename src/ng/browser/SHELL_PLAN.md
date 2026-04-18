@@ -120,3 +120,5 @@ If a change answers "what should the browser do?", it belongs in
 `src/ng/browser`. If it answers "how does this platform display or perform that
 operation?", it belongs in a platform shell or adapter. If WebKit itself cannot
 provide the needed hook, the patch belongs under `changes/`.
+
+---

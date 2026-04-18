@@ -15,3 +15,4 @@ The portable core must not include platform headers. If a feature cannot be
 implemented without a platform include, add a method here and implement it in the
 platform layer.
 
+---

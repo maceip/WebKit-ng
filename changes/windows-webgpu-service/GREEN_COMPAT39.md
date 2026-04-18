@@ -108,3 +108,5 @@ Do not assume rebuilds are cached until `build.ninja` or sccache stats prove it.
 4. Keep `ENABLE_WEBXR=OFF`.
 5. Verify artifacts contain `patch-manifest.json`, `manifest-pre.json`, `manifest-post.json`, `validation-report.json`, and `ng-webkit-windows-<id>.tar.gz`.
 6. Fix sccache as a runner issue before expecting fast turnaround.
+
+---

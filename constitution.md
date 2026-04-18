@@ -78,3 +78,4 @@ small, explicit contracts with testable behavior and narrow platform authority.
 - A browser instance may act as a local loopback sync server, a client, or both.
   Those modes must share the same typed transport contract.
 
+---

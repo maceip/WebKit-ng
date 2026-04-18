@@ -2,6 +2,8 @@
 
 Build orchestration for patched WebKit/WPE WebKit targets.
 
+**WebGPU program (milestones, gates):** [`DOCUMENTATION.md`](./DOCUMENTATION.md).
+
 ## Build status (2026-04-16)
 
 Latest builds, newest first:
@@ -189,3 +191,5 @@ Useful endpoints:
 - `POST /builds/:id/checkpoint`
 - `POST /builds/:id/restart`
 - `POST /builds/:id/cancel`
+
+---

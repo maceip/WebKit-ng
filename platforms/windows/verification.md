@@ -103,3 +103,5 @@ Acceptance needs both checks:
 
 - MiniBrowser launches and right-click `Show Inspector` works.
 - WebGPU/Dawn configuration is intentionally enabled and visible in `CMakeCache.txt`.
+
+---

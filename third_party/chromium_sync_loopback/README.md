@@ -25,3 +25,5 @@ embed Chromium.
 
 Chromium's original license and authors files are preserved as
 `LICENSE.chromium` and `AUTHORS.chromium`.
+
+---

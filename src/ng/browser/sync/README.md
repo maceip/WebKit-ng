@@ -26,3 +26,5 @@ protocol `.proto` files. The next step is a generated-protobuf wire adapter that
 maps `sync_pb::ClientToServerMessage` and `sync_pb::ClientToServerResponse` to
 the portable `LoopbackSyncRpcService`, keeping the real on-wire format
 compatible with Chromium's sync `/command` endpoint.
+
+---

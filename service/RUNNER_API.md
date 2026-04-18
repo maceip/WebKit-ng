@@ -53,10 +53,12 @@ curl -X POST http://localhost:8787/builds \
 
 For Windows WebGPU/Dawn presets, `phase` is optional but preferred. When present,
 the service normalizes the reason as `webgpu phase <N>: ...`; when absent it uses
-a neutral `webgpu:` prefix rather than assuming Phase 1. The Windows WebGPU/Dawn
-preset owns source selection and feature flags. Do not start a raw SSM command
-for this lane; if the dashboard cannot express the operation, extend the API
-first.
+a neutral `webgpu:` prefix rather than assuming a default milestone. The integer
+is a **tag for searchability and checkpoints**; it does **not** define scope.
+**Scope for milestones exists only in** `WebKit-ng/DOCUMENTATION.md`. The Windows
+WebGPU/Dawn preset owns source selection and feature flags. Do not start a raw
+SSM command for this lane; if the dashboard cannot express the operation, extend
+the API first.
 
 Phase checkpoints can also carry `phase`:
 
@@ -85,3 +87,5 @@ curl -X POST http://127.0.0.1:8787/builds \
 ```
 
 Override instance or force local via **`platformEnv.android`** (e.g. **`NG_ANDROID_INSTANCE_ID`**, **`NG_ANDROID_LOCAL`**).
+
+---

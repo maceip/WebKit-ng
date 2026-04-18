@@ -227,3 +227,5 @@ Operational runbook (setup, disk, sccache, what “green” means): **`platforms
    arithmetic).
 4. **Linux + iOS**. Entries exist in `config/platforms.json` as `empty` and
    are not wired up.
+
+---

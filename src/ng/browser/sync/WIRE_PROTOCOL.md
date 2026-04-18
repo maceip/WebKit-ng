@@ -64,3 +64,5 @@ Chromium sync `.proto` corpus into the build directory and links it into
 
 The wire test serializes a real `ClientToServerMessage`, sends it through the
 adapter, and deserializes `ClientToServerResponse`.
+
+---

@@ -7,3 +7,4 @@ Platform UI renders this state and calls `BrowserCommandController` for user
 actions. MiniBrowser can be used as a test host, but it should not own product
 state semantics.
 
+---

@@ -21,3 +21,4 @@ Create a change:
 Then add patches under the new change directory and set `"enabled": true` in
 `config/changes.json`.
 
+---

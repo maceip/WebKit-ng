@@ -18,3 +18,4 @@ Platform bindings will connect this runtime to WebKit script-message handlers:
 - `tabs.*` through `BrowserStateModel` and `BrowserCommandController`
 - action/popup/side-panel presentation through `PlatformBrowserUI`
 
+---

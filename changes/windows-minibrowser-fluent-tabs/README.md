@@ -16,3 +16,5 @@ Windows App SDK or XAML packaging to the WebKit tree. It uses the native Windows
 The same patch also wires the portable `Tools/MiniBrowser/common` tab state
 model into the Windows build so later horizontal and vertical tab controls have
 one source of truth.
+
+---

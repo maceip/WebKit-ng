@@ -38,3 +38,4 @@ src/ng/browser/
 If a file in this tree needs a Win32, AppKit, UIKit, Android, WPE, GTK, or
 WebKit include, it belongs behind a platform adapter instead.
 
+---

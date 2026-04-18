@@ -101,7 +101,11 @@ canvas WebGPU uses harness code or tests that fill those handles explicitly.
 
 ## Acceptance
 
-The build is not accepted from compile success alone. Minimum lane checks:
+The build is not accepted from compile success alone. **Milestone definitions,
+product bar, and exit criteria** are **only** in **`DOCUMENTATION.md`** (repo
+root). This README does not define them.
+
+Minimum **lane harness** checks (artifacts the runner expects) still include:
 
 - `ENABLE_WEBGPU:BOOL=ON` in `CMakeCache.txt`.
 - Dawn DLLs present and loadable beside MiniBrowser.
@@ -110,10 +114,4 @@ The build is not accepted from compile success alone. Minimum lane checks:
 - Runtime probe reports a non-null adapter from `navigator.gpu.requestAdapter()`.
 - Manifest and validation artifacts uploaded by the standard Windows harness.
 
-Extended ladder toward a rendered frame (“ball on screen”):
-
-1. Non-null adapter (above).
-2. `adapter.requestDevice()` resolves (pumping covers async device callbacks).
-3. Swap chain / surface: non-null `hwnd` path + `PresentationContextImpl::configure`.
-4. Queue submit + `present` without validation errors.
-5. Optional: Win `GPUCanvasContext` so pages can call `getContext("webgpu")` without a custom harness.
+---

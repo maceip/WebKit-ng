@@ -98,3 +98,5 @@ custom bucket or prefix can be used without code changes:
   Windows bootstrap download of the patch bundle.
 - `NG_WINDOWS_ARTIFACT_S3` — full prefix override for Windows
 - `NG_MACOS_ARTIFACT_S3` — full prefix override for macOS
+
+---

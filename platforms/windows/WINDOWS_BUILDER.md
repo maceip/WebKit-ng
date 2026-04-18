@@ -85,3 +85,5 @@ Or **`./scripts/run-windows-webgpu-dawn.sh <id>`** — wrapper that sets WebGPU 
 | **`scripts/run-build.sh`** | Entry for **`POST /builds`** / CLI: routes to **`platforms/windows/build.sh`**. |
 | **`scripts/run-windows-webgpu-dawn.sh`** | Sets WebGPU env defaults, calls **`run-build.sh windows`**. |
 | **`webgpu-dawn-runbook.md`** | WebGPU/Dawn lane: DLLs, validation JSON, sccache checks. |
+
+---

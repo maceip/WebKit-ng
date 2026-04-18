@@ -43,5 +43,7 @@ Forward-looking **requirements** for ng-webkit builds. **Platform-specific runbo
 
 ## Related
 
-- **`WEBGPU_WINDOWS_DAWN_MASTER_PLAN.md`** — WebGPU program phases + dashboard hooks §4.2  
+- **`DOCUMENTATION.md`** — WebGPU/Dawn milestones and gates (prescriptive summary)  
 - **`ASSETS.md`** — S3 layout
+
+---

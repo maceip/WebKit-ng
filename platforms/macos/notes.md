@@ -44,3 +44,5 @@ a small native build probe to identify the first hard blocker.
 Conclusion: macOS is now in the orchestration/dependency/change pipeline, but
 native builds are blocked until full Xcode 26.2+ is installed or the host is
 replaced with an image that includes it.
+
+---

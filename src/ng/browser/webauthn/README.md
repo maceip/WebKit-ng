@@ -14,3 +14,4 @@ Platform providers own native authenticator calls only:
 The controller is deliberately narrow. UI may gather consent and present account
 choices, but request policy stays in the portable controller.
 
+---
