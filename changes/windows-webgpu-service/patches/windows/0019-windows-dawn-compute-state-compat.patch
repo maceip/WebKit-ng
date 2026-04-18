@@ -1,0 +1,13 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+index b50d0b5..6471889 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+@@ -464,7 +464,7 @@ RefPtr<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineD
+         return entry;
+     });
+ 
+-    WGPUProgrammableStageDescriptor computeStage { };
++    WGPUComputeState computeStage { };
+     computeStage.nextInChain = nullptr;
+     computeStage.module = m_convertToBackingContext->convertToBacking(protect(descriptor.compute.module).get());
+     computeStage.entryPoint = entryPoint ? DawnCompat::toDawnStringView(*entryPoint) : DawnCompat::toDawnStringView("main");
