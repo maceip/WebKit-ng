@@ -46,10 +46,25 @@ curl -X POST http://localhost:8787/builds \
   -d '{
     "platforms": ["windows"],
     "presets": { "windows": "webgpu-dawn" },
-    "reason": "windows webgpu dawn retry"
+    "phase": 2,
+    "reason": "compute readback retry"
   }'
 ```
 
-The Windows WebGPU/Dawn preset owns source selection and feature flags. Do not
-start a raw SSM command for this lane; if the dashboard cannot express the
-operation, extend the API first.
+For Windows WebGPU/Dawn presets, `phase` is optional but preferred. When present,
+the service normalizes the reason as `webgpu phase <N>: ...`; when absent it uses
+a neutral `webgpu:` prefix rather than assuming Phase 1. The Windows WebGPU/Dawn
+preset owns source selection and feature flags. Do not start a raw SSM command
+for this lane; if the dashboard cannot express the operation, extend the API
+first.
+
+Phase checkpoints can also carry `phase`:
+
+```bash
+curl -X POST http://localhost:8787/builds/<build-id>/checkpoint \
+  -H 'content-type: application/json' \
+  -d '{"phase":2}'
+```
+
+If no message is supplied, the service writes a phase-specific checkpoint with
+artifact and validation-report links for Windows WebGPU builds.

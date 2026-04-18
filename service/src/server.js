@@ -248,6 +248,7 @@ function normalizePresetPayload(value) {
 
 function expandBuildRequest(payload, platforms) {
   const presets = normalizePresetPayload(payload.presets || payload.platformPresets);
+  const phase = normalizeBuildPhase(payload.phase);
   const configs = platformConfig();
   const platformEnv = {};
 
@@ -271,19 +272,49 @@ function expandBuildRequest(payload, platforms) {
 
   return {
     ...payload,
-    reason: normalizeBuildReason(payload.reason, platforms, presets),
+    phase,
+    reason: normalizeBuildReason(payload.reason, platforms, presets, phase),
     presets,
     platformEnv
   };
 }
 
-function normalizeBuildReason(reason, platforms, presets) {
+function normalizeBuildPhase(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const phase = Number(value);
+  if (!Number.isInteger(phase) || phase < 1 || phase > 6)
+    badRequest('phase must be an integer from 1 to 6');
+  return phase;
+}
+
+function normalizeBuildReason(reason, platforms, presets, phase) {
   const raw = String(reason || '').trim();
   const isWindowsWebGPU = platforms.includes('windows') && ['webgpu-dawn', 'webgpu-dawn-fast'].includes(presets.windows);
   if (!isWindowsWebGPU) return raw;
   if (/^webgpu phase \d+:/i.test(raw)) return raw;
-  if (!raw) return 'webgpu phase 1: foundations reproducible build';
-  return `webgpu phase 1: ${raw}`;
+  if (phase) return `webgpu phase ${phase}: ${raw || defaultWebGPUPhaseReason(phase)}`;
+  if (!raw) return 'webgpu: windows dawn build';
+  if (/^webgpu\b/i.test(raw)) return raw;
+  return `webgpu: ${raw}`;
+}
+
+function defaultWebGPUPhaseReason(phase) {
+  switch (phase) {
+  case 1:
+    return 'foundations reproducible build';
+  case 2:
+    return 'in-process compute readback';
+  case 3:
+    return 'canvas present and animation';
+  case 4:
+    return 'multi-process evaluation';
+  case 5:
+    return 'conformance subset';
+  case 6:
+    return 'hardening sustainment';
+  default:
+    return 'windows dawn build';
+  }
 }
 
 function artifactPrefixForPlatform(id, platform, request) {
@@ -315,11 +346,15 @@ function artifactLinksForPlatform(id, platform, request) {
 }
 
 function defaultCheckpointMessage(build, payload) {
-  const phase = Number(payload.phase || 0);
+  const phase = normalizeBuildPhase(payload.phase ?? build.request?.phase);
   const windows = (build.platforms || []).find((platform) => platform.name === 'windows');
   if (phase === 1 && windows) {
     const artifacts = windows.artifacts || artifactLinksForPlatform(build.id, 'windows', build.request || {});
     return `Phase 1 gate met: preset=${build.request?.presets?.windows || 'default'} artifact=${artifacts.artifactPrefix} validation=${artifacts.validationReport}`;
+  }
+  if (phase === 2 && windows) {
+    const artifacts = windows.artifacts || artifactLinksForPlatform(build.id, 'windows', build.request || {});
+    return `Phase 2 checkpoint: compute smoke target; artifact=${artifacts.artifactPrefix} validation=${artifacts.validationReport}`;
   }
   return 'manual checkpoint';
 }
@@ -759,7 +794,7 @@ const server = http.createServer(async (req, res) => {
         const payload = await body(req);
         const checkpoint = {
           time: now(),
-          phase: payload.phase || null,
+          phase: normalizeBuildPhase(payload.phase ?? build.request?.phase),
           message: payload.message || defaultCheckpointMessage(build, payload)
         };
         const updated = updateBuild(build.id, { checkpoints: [...(build.checkpoints || []), checkpoint] });
