@@ -278,6 +278,8 @@ function expandBuildRequest(payload, platforms) {
         badRequest('Windows builds require NG_WINDOWS_ENABLE_SCCACHE=1');
       }
       platformEnv[platform].NG_WINDOWS_ENABLE_SCCACHE = '1';
+      if (phase && !platformEnv[platform].NG_BUILD_PHASE)
+        platformEnv[platform].NG_BUILD_PHASE = String(phase);
     }
   }
 

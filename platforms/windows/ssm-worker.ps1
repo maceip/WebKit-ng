@@ -36,6 +36,15 @@ try {
 } catch {
   $err = $_ | Out-String
   Write-Output "worker: CAUGHT ERROR: $err"
+  $art = Join-Path $WorkDir "artifacts"
+  if (Test-Path $art) {
+    try {
+      Write-Output "worker: syncing failure artifacts to $S3Prefix"
+      & $AwsExe s3 sync $art $S3Prefix --exclude "*" --include "*.zip" --include "*.tar.gz" --include "*.json" --include "*.log" --include "*.html"
+    } catch {
+      Write-Output "worker: failure artifact sync also failed: $($_ | Out-String)"
+    }
+  }
   try {
     $err | Set-Content (Join-Path $WorkDir "BUILD_FAILED.txt") -Encoding UTF8
   } catch {

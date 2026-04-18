@@ -720,13 +720,31 @@ $listenerScript = {
   $l = [System.Net.HttpListener]::new()
   $l.Prefixes.Add("http://localhost:$port/")
   $l.Start()
-  $ctx = $l.GetContext()  # blocks until request (we rely on timeout via job)
-  $reader = [System.IO.StreamReader]::new($ctx.Request.InputStream)
-  $body = $reader.ReadToEnd()
-  $ctx.Response.StatusCode = 200
-  $ctx.Response.OutputStream.Close()
-  $l.Stop()
-  return $body
+  try {
+    while ($true) {
+      $ctx = $l.GetContext()  # blocks until request (we rely on timeout via job)
+      $ctx.Response.Headers.Add("Access-Control-Allow-Origin", "*")
+      $ctx.Response.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS")
+      $ctx.Response.Headers.Add("Access-Control-Allow-Headers", "content-type")
+
+      if ($ctx.Request.HttpMethod -eq "OPTIONS") {
+        $ctx.Response.StatusCode = 204
+        $ctx.Response.OutputStream.Close()
+        continue
+      }
+
+      $reader = [System.IO.StreamReader]::new($ctx.Request.InputStream)
+      $body = $reader.ReadToEnd()
+      $ctx.Response.StatusCode = 200
+      $ctx.Response.OutputStream.Close()
+
+      if ($ctx.Request.HttpMethod -eq "POST" -and $body) {
+        return $body
+      }
+    }
+  } finally {
+    $l.Stop()
+  }
 }
 $listenerJob = Start-Job -ScriptBlock $listenerScript -ArgumentList $probePort
 
@@ -758,6 +776,25 @@ try {
 $validationPath = Join-Path $config.workdir "validation-report.json"
 $validation | ConvertTo-Json -Depth 10 | Set-Content -Path $validationPath -Encoding UTF8
 Write-Host "Validation written to $validationPath"
+Copy-Item $validationPath $artDir
+
+$phase = 0
+try {
+  if ($config.phase) { $phase = [int]$config.phase }
+} catch {
+  $phase = 0
+}
+if ($phase -ge 2 -and $webgpuEnabled) {
+  $smokePassed = $false
+  try {
+    $smokePassed = ($validation.runtime -and $validation.runtime.smokePassed -eq $true)
+  } catch {
+    $smokePassed = $false
+  }
+  if (-not $smokePassed) {
+    throw "Phase $phase runtime validation failed: runtime.smokePassed is not true; see validation-report.json"
+  }
+}
 
 $cmakeCacheSummaryPath = Join-Path $config.workdir "cmake-cache-summary.txt"
 @($cmakeLines) | Set-Content -Path $cmakeCacheSummaryPath -Encoding UTF8

@@ -182,6 +182,7 @@ export NG_MIN_FREE_GIB="$NG_WINDOWS_MIN_FREE_GB"
 export NG_TOOLBIN="$TOOLBIN"
 export NG_BOOTSTRAP="$BOOTSTRAP"
 export NG_FAST_RETRY="$FAST_RETRY"
+export NG_BUILD_PHASE="${NG_BUILD_PHASE:-0}"
 # Default cone sparse roots (BUILD_LAW.md): overrides WebKit's bundled .git/config.worktree
 # sparse pattern (otherwise only repo-root files appear). Export NG_WINDOWS_SPARSE_PATHS to override;
 # use `export NG_WINDOWS_SPARSE_PATHS=` for an explicit empty list (full-tree path in remote-build.ps1).
@@ -243,6 +244,7 @@ min_free = int(os.environ.get("NG_MIN_FREE_GIB", "50").strip() or "50")
 
 cfg = {
     "buildId": os.environ["NG_BUILD_ID"],
+    "phase": int(os.environ.get("NG_BUILD_PHASE", "0").strip() or "0"),
     "workdir": os.environ["NG_WORKDIR"],
     "minFreeGiB": min_free,
     "webkitGitUrl": os.environ["NG_WEBKIT_URL"],
