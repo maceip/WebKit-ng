@@ -1,0 +1,89 @@
+diff --git a/Source/WebCore/Modules/WebGPU/InternalAPI/WebGPUPipelineLayout.h b/Source/WebCore/Modules/WebGPU/InternalAPI/WebGPUPipelineLayout.h
+index 470ce3dee40..f96118ee1b8 100644
+--- a/Source/WebCore/Modules/WebGPU/InternalAPI/WebGPUPipelineLayout.h
++++ b/Source/WebCore/Modules/WebGPU/InternalAPI/WebGPUPipelineLayout.h
+@@ -46,6 +46,7 @@ public:
+ 
+     virtual bool isRemotePipelineLayoutProxy() const { return false; }
+     virtual bool isPipelineLayoutImpl() const { return false; }
++    virtual bool isAutoPipelineLayout() const { return false; }
+ 
+ protected:
+     PipelineLayout() = default;
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+index b2096f1ac31..425a6e61424 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUDeviceImpl.cpp
+@@ -341,7 +341,7 @@ RefPtr<PipelineLayout> DeviceImpl::createPipelineLayout(const PipelineLayoutDesc
+ #endif
+     };
+ 
+-    return PipelineLayoutImpl::create(adoptWebGPU(wgpuDeviceCreatePipelineLayout(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
++    return PipelineLayoutImpl::create(adoptWebGPU(wgpuDeviceCreatePipelineLayout(m_backing.get(), &backingDescriptor)), m_convertToBackingContext, !descriptor.bindGroupLayouts);
+ }
+ 
+ RefPtr<BindGroup> DeviceImpl::createBindGroup(const BindGroupDescriptor& descriptor)
+@@ -478,7 +478,7 @@ RefPtr<ComputePipeline> DeviceImpl::createComputePipeline(const ComputePipelineD
+     WGPUComputePipelineDescriptor backingDescriptor { };
+     backingDescriptor.nextInChain = nullptr;
+     backingDescriptor.label = DawnCompat::toDawnStringView(label);
+-    backingDescriptor.layout = descriptor.layout ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr;
++    backingDescriptor.layout = (descriptor.layout && !descriptor.layout->isAutoPipelineLayout()) ? m_convertToBackingContext->convertToBacking(*protect(descriptor.layout)) : nullptr;
+     backingDescriptor.compute = computeStage;
+ 
+     return ComputePipelineImpl::create(adoptWebGPU(wgpuDeviceCreateComputePipeline(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
+index 1f1b5b56a01..00f4b4b02aa 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.cpp
+@@ -38,9 +38,10 @@ namespace WebCore::WebGPU {
+ 
+ WTF_MAKE_TZONE_ALLOCATED_IMPL(PipelineLayoutImpl);
+ 
+-PipelineLayoutImpl::PipelineLayoutImpl(WebGPUPtr<WGPUPipelineLayout>&& pipelineLayout, ConvertToBackingContext& convertToBackingContext)
++PipelineLayoutImpl::PipelineLayoutImpl(WebGPUPtr<WGPUPipelineLayout>&& pipelineLayout, ConvertToBackingContext& convertToBackingContext, bool isAutoPipelineLayout)
+     : m_backing(WTF::move(pipelineLayout))
+     , m_convertToBackingContext(convertToBackingContext)
++    , m_isAutoPipelineLayout(isAutoPipelineLayout)
+ {
+ }
+ 
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.h b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.h
+index 6bf30aaca42..4410c903c40 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.h
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUPipelineLayoutImpl.h
+@@ -39,9 +39,9 @@ class ConvertToBackingContext;
+ class PipelineLayoutImpl final : public PipelineLayout {
+     WTF_MAKE_TZONE_ALLOCATED(PipelineLayoutImpl);
+ public:
+-    static Ref<PipelineLayoutImpl> create(WebGPUPtr<WGPUPipelineLayout>&& pipelineLayout, ConvertToBackingContext& convertToBackingContext)
++    static Ref<PipelineLayoutImpl> create(WebGPUPtr<WGPUPipelineLayout>&& pipelineLayout, ConvertToBackingContext& convertToBackingContext, bool isAutoPipelineLayout = false)
+     {
+-        return adoptRef(*new PipelineLayoutImpl(WTF::move(pipelineLayout), convertToBackingContext));
++        return adoptRef(*new PipelineLayoutImpl(WTF::move(pipelineLayout), convertToBackingContext, isAutoPipelineLayout));
+     }
+ 
+     virtual ~PipelineLayoutImpl();
+@@ -49,7 +49,7 @@ public:
+ private:
+     friend class DowncastConvertToBackingContext;
+ 
+-    PipelineLayoutImpl(WebGPUPtr<WGPUPipelineLayout>&&, ConvertToBackingContext&);
++    PipelineLayoutImpl(WebGPUPtr<WGPUPipelineLayout>&&, ConvertToBackingContext&, bool isAutoPipelineLayout);
+ 
+     PipelineLayoutImpl(const PipelineLayoutImpl&) = delete;
+     PipelineLayoutImpl(PipelineLayoutImpl&&) = delete;
+@@ -58,11 +58,13 @@ private:
+ 
+     WGPUPipelineLayout backing() const { return m_backing.get(); }
+     bool isPipelineLayoutImpl() const final { return true; }
++    bool isAutoPipelineLayout() const final { return m_isAutoPipelineLayout; }
+ 
+     void setLabelInternal(const String&) final;
+ 
+     WebGPUPtr<WGPUPipelineLayout> m_backing;
+     const Ref<ConvertToBackingContext> m_convertToBackingContext;
++    bool m_isAutoPipelineLayout { false };
+ };
+ 
+ } // namespace WebCore::WebGPU
