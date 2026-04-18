@@ -36,6 +36,29 @@
             "BUILD_DONE.txt is written only after S3 sync succeeds",
             "sccache-report.json proves CMakeCache, build.ninja, Embedded MSVC debug info, and nonzero compile activity"
           ]
+        },
+        "webgpu-dawn-fast": {
+          "description": "Warm Windows WebGPU/Dawn retry lane: reuse checkout, WebKitBuild, and local sccache.",
+          "env": {
+            "NG_WINDOWS_SOURCE_PRESET": "iangrunert-win-gigacage-skia-fixes",
+            "NG_WINDOWS_ENABLE_WEBGPU": "1",
+            "NG_WINDOWS_ENABLE_SCCACHE": "1",
+            "NG_WINDOWS_FAST_RETRY": "1",
+            "NG_WINDOWS_NINJA_JOBS": "8"
+          },
+          "validationArtifacts": [
+            "validation-report.json",
+            "validation-recovered.json",
+            "manifest-pre.json",
+            "manifest-post.json",
+            "build-progress.json",
+            "sccache-report.json"
+          ],
+          "acceptance": [
+            "Reuses C:/W/ng-webkit-fast unless NG_WINDOWS_CLEAN_SOURCE overrides it",
+            "Preserves WebKitBuild for incremental Ninja retries",
+            "Keeps sccache mandatory and verified"
+          ]
         }
       }
     },

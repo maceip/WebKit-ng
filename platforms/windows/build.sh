@@ -27,6 +27,7 @@ ENABLE_SCCACHE="${NG_WINDOWS_ENABLE_SCCACHE:-1}"
 SCCACHE_EXE="${NG_WINDOWS_SCCACHE_EXE:-$TOOLBIN/sccache.exe}"
 SCCACHE_DIR="${NG_WINDOWS_SCCACHE_DIR:-C:/Bootstrap/sccache}"
 NINJA_JOBS="${NG_WINDOWS_NINJA_JOBS:-4}"
+FAST_RETRY="${NG_WINDOWS_FAST_RETRY:-0}"
 
 if [[ "$ENABLE_SCCACHE" != "1" && "${NG_WINDOWS_ALLOW_SCCACHE_OFF:-0}" != "1" ]]; then
   echo "Windows builds require sccache. Set NG_WINDOWS_ENABLE_SCCACHE=1, or NG_WINDOWS_ALLOW_SCCACHE_OFF=1 for an explicit emergency bypass." >&2
@@ -42,7 +43,9 @@ fi
 # Short tree path: CMake emits .bat custom commands with huge argv lists; Windows cmd.exe
 # limits a single line to ~8191 chars (generate-serializers.py with many .serialization.in paths).
 # Default C:/W/n<hash> keeps per-path prefixes small. Override with NG_WINDOWS_CLEAN_SOURCE.
-if [[ -z "${NG_WINDOWS_CLEAN_SOURCE+x}" ]]; then
+if [[ -z "${NG_WINDOWS_CLEAN_SOURCE+x}" && "$FAST_RETRY" == "1" ]]; then
+  CLEAN_SOURCE="C:/W/ng-webkit-fast"
+elif [[ -z "${NG_WINDOWS_CLEAN_SOURCE+x}" ]]; then
   _wk_short="$(printf '%s' "$ID" | md5sum | awk '{print substr($1,1,14)}')"
   CLEAN_SOURCE="C:/W/n${_wk_short}"
 else
@@ -142,6 +145,7 @@ export NG_SCCACHE_EXE="$SCCACHE_EXE"
 export NG_SCCACHE_DIR="$SCCACHE_DIR"
 export NG_TOOLBIN="$TOOLBIN"
 export NG_BOOTSTRAP="$BOOTSTRAP"
+export NG_FAST_RETRY="$FAST_RETRY"
 # Default cone sparse roots (BUILD_LAW.md): overrides WebKit's bundled .git/config.worktree
 # sparse pattern (otherwise only repo-root files appear). Export NG_WINDOWS_SPARSE_PATHS to override;
 # use `export NG_WINDOWS_SPARSE_PATHS=` for an explicit empty list (full-tree path in remote-build.ps1).
@@ -157,6 +161,7 @@ out = os.environ["NG_STAGE_CONFIG_OUT"]
 patch_manifest_out = os.environ["NG_STAGE_PATCH_MANIFEST_OUT"]
 use_clean = os.environ.get("NG_USE_CLEAN", "1").strip() not in ("0", "false", "False", "")
 enable_sccache = os.environ.get("NG_ENABLE_SCCACHE", "0").strip() in ("1", "true", "True", "yes", "on")
+fast_retry = os.environ.get("NG_FAST_RETRY", "0").strip() in ("1", "true", "True", "yes", "on")
 sparse_raw = os.environ.get("NG_WINDOWS_SPARSE_PATHS", "").strip()
 sparse = sparse_raw.split() if sparse_raw else []
 stage = Path(patch_manifest_out).parent
@@ -217,6 +222,9 @@ cfg = {
     "sccacheDir": os.environ["NG_SCCACHE_DIR"],
     "toolbin": os.environ["NG_TOOLBIN"],
     "patchManifest": "patch-manifest.json",
+    "reuseCheckout": fast_retry,
+    "preserveBuildDir": fast_retry,
+    "fastRetry": fast_retry,
 }
 if sparse:
     cfg["sparseCheckoutPaths"] = sparse
@@ -300,4 +308,5 @@ fi
 export AWS_REGION="$REGION" NG_WINDOWS_INSTANCE_ID="$INSTANCE_ID"
 ng_windows_ssm_poll_build_markers "$WORKDIR"
 
-"$NG_ROOT/scripts/checkpoint.sh" "$ID" windows "windows remote build completed (bootstrap $COMMAND_ID, marker poll OK)"
+checkpoint_message="windows remote build completed bootstrap=$COMMAND_ID marker_poll=OK"
+"$NG_ROOT/scripts/checkpoint.sh" "$ID" windows "$checkpoint_message"

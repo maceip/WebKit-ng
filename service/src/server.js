@@ -349,9 +349,13 @@ function startPlatformBuild(build, platform) {
     if (!stored) return;
     const target = stored.platforms.find((item) => item.name === platform);
     if (!target) return;
-    target.status = code === 0 ? 'succeeded' : 'failed';
+    const inferred = code === 0 ? null : inferExternalBuildStatusFromLog(build.id, platform);
+    target.status = code === 0 || inferred.status === 'succeeded' ? 'succeeded' : 'failed';
     target.exitCode = code;
     target.signal = signal;
+    if (code !== 0 && inferred.status === 'succeeded') {
+      target.warning = `runner exited ${code} after remote success marker: ${inferred.detail}`;
+    }
     target.finishedAt = now();
     stored.status = stored.platforms.some((item) => item.status === 'running') ? 'running'
       : stored.platforms.every((item) => item.status === 'succeeded') ? 'succeeded'

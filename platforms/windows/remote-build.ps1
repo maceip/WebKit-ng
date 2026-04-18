@@ -255,7 +255,11 @@ $winPatches = @(Get-ChildItem (Join-Path $patchRoot "windows") -Filter *.patch -
 $source = $null
 if ($config.useCleanCheckout -eq $true) {
   $cleanRoot = $config.cleanSourceRoot
-  if (Test-Path $cleanRoot) {
+  $reuseCheckout = $false
+  if ($null -ne $config.PSObject.Properties["reuseCheckout"]) {
+    $reuseCheckout = [bool]$config.reuseCheckout
+  }
+  if ((Test-Path $cleanRoot) -and -not $reuseCheckout) {
     Remove-Item -Recurse -Force $cleanRoot
   }
   New-Item -ItemType Directory -Force -Path (Split-Path $cleanRoot) | Out-Null
@@ -263,7 +267,14 @@ if ($config.useCleanCheckout -eq $true) {
 
   $commit = $config.webkitCommit
   $sparse = @($config.sparseCheckoutPaths)
-  if ($sparse.Count -gt 0) {
+  if ((Test-Path (Join-Path $cleanRoot ".git")) -and $reuseCheckout) {
+    Write-Host "Reusing existing checkout: $cleanRoot"
+    Set-Location $cleanRoot
+    Invoke-Git fetch origin $commit
+    Invoke-Git reset --hard $commit
+    Invoke-Git clean -fdx -e WebKitBuild/
+    $source = $cleanRoot
+  } elseif ($sparse.Count -gt 0) {
     Invoke-Git clone --filter=blob:none --no-checkout $config.webkitGitUrl $cleanRoot
     Set-Location $cleanRoot
     Invoke-Git sparse-checkout init --cone
@@ -329,8 +340,14 @@ $prePath = Join-Path $config.workdir "manifest-pre.json"
 $pre | ConvertTo-Json -Depth 10 | Set-Content -Path $prePath -Encoding UTF8
 
 $buildDir = Join-Path $source "WebKitBuild"
-if (Test-Path $buildDir) {
+$preserveBuildDir = $false
+if ($null -ne $config.PSObject.Properties["preserveBuildDir"]) {
+  $preserveBuildDir = [bool]$config.preserveBuildDir
+}
+if ((Test-Path $buildDir) -and -not $preserveBuildDir) {
   Remove-Item -Recurse -Force $buildDir
+} elseif ((Test-Path $buildDir) -and $preserveBuildDir) {
+  Write-Host "Preserving existing build directory for fast retry: $buildDir"
 }
 
 Enable-SymlinkEvaluation
