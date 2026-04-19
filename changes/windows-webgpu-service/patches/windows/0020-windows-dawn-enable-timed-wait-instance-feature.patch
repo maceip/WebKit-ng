@@ -1,0 +1,20 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCreateImpl.cpp
+@@ -51,7 +51,15 @@ RefPtr<GPU> create(ScheduleWorkFunction&& scheduleWorkFunction, const WebCore::P
+ #if PLATFORM(WIN)
+     UNUSED_PARAM(scheduleWorkFunction);
+     UNUSED_PARAM(webProcessIdentity);
+-    WGPUInstanceDescriptor descriptor { };
++    static constexpr WGPUInstanceFeatureName requiredFeatures[] {
++        WGPUInstanceFeatureName_TimedWaitAny,
++    };
++    WGPUInstanceDescriptor descriptor {
++        .nextInChain = nullptr,
++        .requiredFeatureCount = 1,
++        .requiredFeatures = requiredFeatures,
++        .requiredLimits = nullptr,
++    };
+ #else
+ #if !HAVE(TASK_IDENTITY_TOKEN)
+     UNUSED_PARAM(webProcessIdentity);

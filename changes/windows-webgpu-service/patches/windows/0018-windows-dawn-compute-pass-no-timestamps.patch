@@ -1,0 +1,23 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
+index 52ee782..0a4b418 100644
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUCommandEncoderImpl.cpp
+@@ -142,17 +142,10 @@ RefPtr<ComputePassEncoder> CommandEncoderImpl::beginComputePass(const std::optio
+ #if PLATFORM(WIN)
+     String label = descriptor ? descriptor->label : emptyString();
+ 
+-    WGPUComputePassTimestampWrites timestampWrites { };
+-    if (descriptor && descriptor->timestampWrites && descriptor->timestampWrites->querySet) {
+-        timestampWrites.querySet = m_convertToBackingContext->convertToBacking(*protect(descriptor->timestampWrites->querySet));
+-        timestampWrites.beginningOfPassWriteIndex = descriptor->timestampWrites->beginningOfPassWriteIndex;
+-        timestampWrites.endOfPassWriteIndex = descriptor->timestampWrites->endOfPassWriteIndex;
+-    }
+-
+     WGPUComputePassDescriptor backingDescriptor { };
+     backingDescriptor.nextInChain = nullptr;
+     backingDescriptor.label = DawnCompat::toDawnStringView(label);
+-    backingDescriptor.timestampWrites = timestampWrites.querySet ? &timestampWrites : nullptr;
++    backingDescriptor.timestampWrites = nullptr;
+ 
+     return ComputePassEncoderImpl::create(adoptWebGPU(wgpuCommandEncoderBeginComputePass(m_backing.get(), &backingDescriptor)), m_convertToBackingContext);
+ #else
