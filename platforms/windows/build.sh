@@ -84,6 +84,7 @@ export NG_STAGE_PATCH_ROOT="$STAGE/patches"
 export NG_BUILD_PLATFORM="windows"
 export NG_ROOT
 export NG_WINDOWS_PATCH_SOURCE="${NG_WINDOWS_PATCH_SOURCE:-committed}"
+export NG_WINDOWS_PATCH_REF="${NG_WINDOWS_PATCH_REF:-HEAD}"
 python3 <<'PY'
 import json
 import os
@@ -95,10 +96,11 @@ root = Path(os.environ["NG_ROOT"])
 patch_root = Path(os.environ["NG_STAGE_PATCH_ROOT"])
 platform = os.environ["NG_BUILD_PLATFORM"]
 patch_source = os.environ.get("NG_WINDOWS_PATCH_SOURCE", "committed")
+patch_ref = os.environ.get("NG_WINDOWS_PATCH_REF", "HEAD")
 changes_file = root / "config" / "changes.json"
 
 if patch_source == "committed":
-    changes_json = subprocess.check_output(["git", "-C", str(root), "show", "HEAD:config/changes.json"], text=True, encoding="utf-8")
+    changes_json = subprocess.check_output(["git", "-C", str(root), "show", f"{patch_ref}:config/changes.json"], text=True, encoding="utf-8")
     changes = json.loads(changes_json).get("activeChanges", [])
 elif patch_source == "working":
     with changes_file.open(encoding="utf-8") as f:
@@ -120,7 +122,7 @@ for change_index, change in enumerate(changes):
         source_prefix = f"changes/{change_id}/patches/{bucket}"
         if patch_source == "committed":
             listed = subprocess.run(
-                ["git", "-C", str(root), "ls-tree", "-r", "--name-only", "HEAD", "--", source_prefix],
+                ["git", "-C", str(root), "ls-tree", "-r", "--name-only", patch_ref, "--", source_prefix],
                 text=True,
                 encoding="utf-8",
                 stdout=subprocess.PIPE,
@@ -147,7 +149,7 @@ for change_index, change in enumerate(changes):
         for patch_index, patch in enumerate(sorted(patch_paths)):
             target = target_dir / f"0000-change-{change_index:02d}-{patch_index:02d}-{change_id}-{patch.name}"
             if patch_source == "committed":
-                content = subprocess.check_output(["git", "-C", str(root), "show", f"HEAD:{patch.as_posix()}"])
+                content = subprocess.check_output(["git", "-C", str(root), "show", f"{patch_ref}:{patch.as_posix()}"])
                 target.write_bytes(content)
             else:
                 shutil.copy2(root / patch, target)
