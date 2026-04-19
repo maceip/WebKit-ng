@@ -1,0 +1,39 @@
+diff --git a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
+--- a/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
++++ b/Source/WebCore/Modules/WebGPU/Implementation/WebGPUImpl.cpp
+@@ -75,12 +75,14 @@
+     WGPUInstance instance { nullptr };
+ };
+ 
+-static void dawnRequestAdapterCallback(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView, void* userdata1, void*)
++static void dawnRequestAdapterCallback(WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, void* userdata1, void*)
+ {
+     std::unique_ptr<DawnRequestAdapterUserdata> data(static_cast<DawnRequestAdapterUserdata*>(userdata1));
+     if (!data)
+         return;
+     if (status != WGPURequestAdapterStatus_Success || !adapter) {
++        auto messageString = DawnCompat::stringFromDawn(message).utf8();
++        WTFLogAlways("WebGPU Dawn requestAdapter failed: status=%u adapter=%p message=%s", static_cast<unsigned>(status), adapter, messageString.data());
+         data->callback(nullptr);
+         return;
+     }
+@@ -92,16 +94,13 @@
+     Ref convertToBackingContext = m_convertToBackingContext;
+ 
+ #if PLATFORM(WIN)
++    auto powerPreference = options.powerPreference ? convertToBackingContext->convertToBacking(*options.powerPreference) : static_cast<WGPUPowerPreference>(WGPUPowerPreference_Undefined);
+     WGPURequestAdapterOptions backingOptions {
+         .nextInChain = nullptr,
+         .featureLevel = WGPUFeatureLevel_Undefined,
+-#if CPU(X86_64)
+-        .powerPreference = WGPUPowerPreference_HighPerformance,
+-#else
+-        .powerPreference = options.powerPreference ? convertToBackingContext->convertToBacking(*options.powerPreference) : static_cast<WGPUPowerPreference>(WGPUPowerPreference_Undefined),
+-#endif
++        .powerPreference = powerPreference,
+         .forceFallbackAdapter = options.forceFallbackAdapter,
+-        .backendType = WGPUBackendType_D3D12,
++        .backendType = WGPUBackendType_Undefined,
+         .compatibleSurface = nullptr,
+     };
+ #else
