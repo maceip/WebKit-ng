@@ -1,0 +1,15 @@
+diff --git a/Tools/MiniBrowser/win/WebKitBrowserWindow.cpp b/Tools/MiniBrowser/win/WebKitBrowserWindow.cpp
+index 000000000000..000000000000 100644
+--- a/Tools/MiniBrowser/win/WebKitBrowserWindow.cpp
++++ b/Tools/MiniBrowser/win/WebKitBrowserWindow.cpp
+@@ -148,6 +148,10 @@ Ref<BrowserWindow> WebKitBrowserWindow::create(BrowserWindowClient& client, HWND
+     auto preferences = adoptWK(WKPreferencesCreate());
+     WKPreferencesSetMediaCapabilitiesEnabled(preferences.get(), false);
+     WKPreferencesSetDeveloperExtrasEnabled(preferences.get(), true);
++#if ENABLE(WEBGPU)
++    auto webGPUFeatureKey = createWKString(L"WebGPUEnabled");
++    WKPreferencesSetExperimentalFeatureForKey(preferences.get(), true, webGPUFeatureKey.get());
++#endif
+ 
+     auto pageConf = adoptWK(WKPageConfigurationCreate());
+     WKPageConfigurationSetWebsiteDataStore(pageConf.get(), websiteDataStore.get());
