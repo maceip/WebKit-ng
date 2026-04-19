@@ -654,12 +654,33 @@ $testHtml = @"
     };
   }
 
+  async function requestAdapterForProbe() {
+    const attempts = [
+      { mode: 'default', options: undefined },
+      { mode: 'fallback', options: { forceFallbackAdapter: true } }
+    ];
+    const errors = [];
+    for (const attempt of attempts) {
+      try {
+        const adapter = await navigator.gpu.requestAdapter(attempt.options);
+        if (adapter)
+          return { adapter, mode: attempt.mode, errors };
+        errors.push(attempt.mode + ': returned null');
+      } catch (e) {
+        errors.push(attempt.mode + ': ' + errorString(e));
+      }
+    }
+    return { adapter: null, mode: null, errors };
+  }
+
   const report = {
     userAgent: navigator.userAgent,
     gpuAvailable: !!navigator.gpu,
     preferredCanvasFormat: navigator.gpu ? navigator.gpu.getPreferredCanvasFormat() : null,
     wgslLanguageFeatures: navigator.gpu ? toArray(navigator.gpu.wgslLanguageFeatures) : [],
     adapter: null,
+    adapterMode: null,
+    adapterAttemptErrors: [],
     adapterFeatures: [],
     adapterLimits: null,
     adapterError: null,
@@ -672,7 +693,10 @@ $testHtml = @"
   };
   if (navigator.gpu) {
     try {
-      const a = await navigator.gpu.requestAdapter();
+      const adapterResult = await requestAdapterForProbe();
+      const a = adapterResult.adapter;
+      report.adapterMode = adapterResult.mode;
+      report.adapterAttemptErrors = adapterResult.errors;
       if (a) {
         const info = (a.info || (a.requestAdapterInfo ? await a.requestAdapterInfo() : {}));
         report.adapter = { vendor: info.vendor, architecture: info.architecture, device: info.device, description: info.description };
@@ -696,7 +720,7 @@ $testHtml = @"
           report.deviceError = errorString(e);
         }
       } else {
-        report.adapterError = 'requestAdapter returned null';
+        report.adapterError = 'requestAdapter returned null; attempts: ' + adapterResult.errors.join('; ');
       }
     } catch (e) { report.adapterError = errorString(e); }
   }
